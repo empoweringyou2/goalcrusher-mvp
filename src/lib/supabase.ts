@@ -4,13 +4,36 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables')
+  console.warn('Supabase environment variables are missing. Using demo mode.')
+  // Create a mock client for development when Supabase is not configured
+  const mockClient = {
+    auth: {
+      getSession: () => Promise.resolve({ data: { session: null }, error: null }),
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+      signInWithOAuth: () => Promise.resolve({ data: null, error: { message: 'Supabase not configured' } }),
+      signUp: () => Promise.resolve({ data: null, error: { message: 'Supabase not configured' } }),
+      signInWithPassword: () => Promise.resolve({ data: null, error: { message: 'Supabase not configured' } }),
+      signOut: () => Promise.resolve({ error: null }),
+      resetPasswordForEmail: () => Promise.resolve({ data: null, error: { message: 'Supabase not configured' } })
+    },
+    from: () => ({
+      insert: () => ({ select: () => ({ single: () => Promise.resolve({ data: null, error: { message: 'Supabase not configured' } }) }) }),
+      select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: null, error: { message: 'Supabase not configured' } }) }) })
+    })
+  }
+  
+  // Export the mock client
+  export const supabase = mockClient as any
+} else {
+  export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 }
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 // Auth helper functions
 export const signInWithGoogle = async () => {
+  if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+    return { data: null, error: { message: 'Supabase not configured. Please add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your .env file.' } }
+  }
+  
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
@@ -25,6 +48,10 @@ export const signInWithGoogle = async () => {
 }
 
 export const signInWithApple = async () => {
+  if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+    return { data: null, error: { message: 'Supabase not configured. Please add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your .env file.' } }
+  }
+  
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'apple',
     options: {
@@ -35,6 +62,10 @@ export const signInWithApple = async () => {
 }
 
 export const signUpWithEmail = async (email: string, password: string, name: string) => {
+  if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+    return { data: null, error: { message: 'Supabase not configured. Please add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your .env file.' } }
+  }
+  
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
@@ -49,6 +80,10 @@ export const signUpWithEmail = async (email: string, password: string, name: str
 }
 
 export const signInWithEmail = async (email: string, password: string) => {
+  if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+    return { data: null, error: { message: 'Supabase not configured. Please add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your .env file.' } }
+  }
+  
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password
@@ -62,6 +97,10 @@ export const signOut = async () => {
 }
 
 export const resetPassword = async (email: string) => {
+  if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+    return { data: null, error: { message: 'Supabase not configured. Please add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your .env file.' } }
+  }
+  
   const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: `${window.location.origin}/auth/reset-password`
   })
@@ -70,6 +109,10 @@ export const resetPassword = async (email: string) => {
 
 // Database helper functions
 export const createUserProfile = async (userId: string, email: string, name: string, avatar?: string) => {
+  if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+    return { data: null, error: { message: 'Supabase not configured' } }
+  }
+  
   const { data, error } = await supabase
     .from('users')
     .insert([
@@ -89,6 +132,10 @@ export const createUserProfile = async (userId: string, email: string, name: str
 }
 
 export const getUserProfile = async (userId: string) => {
+  if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+    return { data: null, error: { message: 'Supabase not configured' } }
+  }
+  
   const { data, error } = await supabase
     .from('users')
     .select('*')
@@ -99,6 +146,10 @@ export const getUserProfile = async (userId: string) => {
 }
 
 export const createUserSettings = async (userId: string) => {
+  if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+    return { data: null, error: { message: 'Supabase not configured' } }
+  }
+  
   const { data, error } = await supabase
     .from('user_settings')
     .insert([
