@@ -85,9 +85,9 @@ serve(async (req) => {
       )
     }
 
-    // For this demo, we'll use a hardcoded user ID since we're bypassing auth
+    // For this demo, we'll use a valid UUID for the development user
     // In production, you'd get this from the authenticated user
-    const userId = 'dev-user-123'
+    const userId = '00000000-0000-0000-0000-000000000001'
 
     // Prepare task data
     const taskData = {
