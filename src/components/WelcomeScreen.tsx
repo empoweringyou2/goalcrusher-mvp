@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Sparkles, Star, Wand2, UserX } from 'lucide-react';
+import { Sparkles, Star, Wand2, UserX, Loader2 } from 'lucide-react';
 import { AuthForm } from './AuthForm';
+import { continueAsGuest } from '../lib/supabase';
 
 interface WelcomeScreenProps {
   onLogin: () => void;
@@ -9,6 +10,31 @@ interface WelcomeScreenProps {
 
 export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onLogin, onBypassLogin }) => {
   const [showAuthForm, setShowAuthForm] = useState(false);
+  const [guestLoading, setGuestLoading] = useState(false);
+
+  const handleGuestLogin = async () => {
+    setGuestLoading(true);
+    
+    try {
+      const { data, error } = await continueAsGuest();
+      
+      if (error) {
+        console.error('Failed to create guest user:', error);
+        alert('Could not start as guest. Please try again.');
+        return;
+      }
+      
+      if (data) {
+        console.log('Guest user created:', data);
+        onLogin(); // Transition to dashboard
+      }
+    } catch (err) {
+      console.error('Unexpected error during guest login:', err);
+      alert('Could not start as guest. Please try again.');
+    } finally {
+      setGuestLoading(false);
+    }
+  };
 
   if (showAuthForm) {
     return (
@@ -16,7 +42,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onLogin, onBypassL
         <div className="w-full max-w-md">
           <AuthForm onSuccess={onLogin} />
           
-          {/* Back to welcome and bypass options */}
+          {/* Back to welcome and guest options */}
           <div className="mt-6 text-center space-y-3">
             <button
               onClick={() => setShowAuthForm(false)}
@@ -27,11 +53,16 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onLogin, onBypassL
             
             <div className="border-t border-gray-800 pt-3">
               <button
-                onClick={onBypassLogin}
-                className="flex items-center gap-2 text-gray-400 hover:text-yellow-400 text-sm transition-colors mx-auto"
+                onClick={handleGuestLogin}
+                disabled={guestLoading}
+                className="flex items-center gap-2 text-gray-400 hover:text-yellow-400 text-sm transition-colors mx-auto disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <UserX className="w-4 h-4" />
-                Continue as Guest (Development)
+                {guestLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <UserX className="w-4 h-4" />
+                )}
+                Continue as Guest
               </button>
             </div>
           </div>
@@ -94,16 +125,26 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onLogin, onBypassL
               Start Your Quest
             </button>
 
-            {/* Development bypass button */}
+            {/* Guest login button */}
             <button
-              onClick={onBypassLogin}
-              className="w-full bg-gray-800 text-gray-300 px-8 py-3 rounded-xl text-base font-medium hover:bg-gray-700 hover:text-white transition-all duration-300 border border-gray-700 flex items-center justify-center gap-2"
+              onClick={handleGuestLogin}
+              disabled={guestLoading}
+              className="w-full bg-gray-800 text-gray-300 px-8 py-3 rounded-xl text-base font-medium hover:bg-gray-700 hover:text-white transition-all duration-300 border border-gray-700 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <UserX className="w-5 h-5" />
-              Continue as Guest
-              <span className="text-xs bg-yellow-400/20 text-yellow-400 px-2 py-1 rounded-full ml-2">
-                DEV
-              </span>
+              {guestLoading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Creating Guest Account...
+                </>
+              ) : (
+                <>
+                  <UserX className="w-5 h-5" />
+                  Continue as Guest
+                  <span className="text-xs bg-blue-400/20 text-blue-400 px-2 py-1 rounded-full ml-2">
+                    Try Now
+                  </span>
+                </>
+              )}
             </button>
           </div>
 

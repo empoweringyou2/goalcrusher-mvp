@@ -2,7 +2,7 @@ import React from 'react';
 import { Calendar, Target, Trophy, BarChart3, Settings, Wand2, LogOut } from 'lucide-react';
 import { Screen } from '../App';
 import { User, AppConfig } from '../types/user';
-import { signOut } from '../lib/supabase';
+import { signOut, clearGuestUser } from '../lib/supabase';
 
 interface NavigationProps {
   currentScreen: Screen;
@@ -20,11 +20,19 @@ export const Navigation: React.FC<NavigationProps> = ({ currentScreen, onNavigat
     { id: 'settings', icon: Settings, label: 'Settings' },
   ];
 
+  const isGuestUser = user.email?.includes('guest-');
+
   const handleSignOut = async () => {
     try {
-      await signOut();
-      // The auth state change will be handled by useAuth hook
-      window.location.reload();
+      if (isGuestUser) {
+        // For guest users, just clear local data
+        clearGuestUser();
+        window.location.reload();
+      } else {
+        // For authenticated users, sign out through Supabase
+        await signOut();
+        window.location.reload();
+      }
     } catch (error) {
       console.error('Error signing out:', error);
     }
@@ -100,7 +108,7 @@ export const Navigation: React.FC<NavigationProps> = ({ currentScreen, onNavigat
             className="w-full flex items-center gap-3 p-3 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
           >
             <LogOut className="w-5 h-5" />
-            Sign Out
+            {isGuestUser ? 'Exit Guest Mode' : 'Sign Out'}
           </button>
         </div>
 
@@ -113,7 +121,9 @@ export const Navigation: React.FC<NavigationProps> = ({ currentScreen, onNavigat
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-white font-medium truncate">{user.name}</p>
-                <p className="text-gray-400 text-sm truncate">{user.email}</p>
+                <p className="text-gray-400 text-sm truncate">
+                  {isGuestUser ? 'Guest User' : user.email}
+                </p>
               </div>
             </div>
             
@@ -143,12 +153,12 @@ export const Navigation: React.FC<NavigationProps> = ({ currentScreen, onNavigat
                 <span className={`text-xs font-medium ${
                   user.plan === 'pro' ? 'text-purple-400' : 'text-gray-300'
                 }`}>
-                  {user.plan === 'pro' ? '👑 Pro' : '🆓 Free'}
+                  {isGuestUser ? '👤 Guest' : user.plan === 'pro' ? '👑 Pro' : '🆓 Free'}
                 </span>
               </div>
               {appConfig.betaAccess && (
                 <p className="text-xs text-blue-400 mt-1 opacity-75">
-                  All features unlocked during beta
+                  {isGuestUser ? 'Guest mode - progress saved locally' : 'All features unlocked during beta'}
                 </p>
               )}
             </div>

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { User as SupabaseUser } from '@supabase/supabase-js'
-import { supabase, getUserProfile, createUserProfile, createUserSettings } from '../lib/supabase'
+import { supabase, getUserProfile, createUserProfile, createUserSettings, getGuestUser, clearGuestUser } from '../lib/supabase'
 import { User } from '../types/user'
 
 export const useAuth = () => {
@@ -21,6 +21,9 @@ export const useAuth = () => {
         } else if (session?.user) {
           setSupabaseUser(session.user)
           await loadUserProfile(session.user.id)
+        } else {
+          // Check for guest user
+          await checkForGuestUser()
         }
       } catch (err) {
         console.error('Error in getInitialSession:', err)
@@ -41,11 +44,18 @@ export const useAuth = () => {
           setSupabaseUser(session.user)
           
           if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+            // Clear any guest user data when signing in with real account
+            clearGuestUser()
             await loadUserProfile(session.user.id)
           }
         } else {
           setSupabaseUser(null)
-          setUser(null)
+          
+          if (event === 'SIGNED_OUT') {
+            setUser(null)
+            // Check for guest user after sign out
+            await checkForGuestUser()
+          }
         }
         
         setLoading(false)
@@ -54,6 +64,35 @@ export const useAuth = () => {
 
     return () => subscription.unsubscribe()
   }, [])
+
+  const checkForGuestUser = async () => {
+    const guestUserId = localStorage.getItem('guest_user_id')
+    if (guestUserId) {
+      try {
+        const { data: guestUser, error } = await getGuestUser(guestUserId)
+        
+        if (error || !guestUser) {
+          console.error('Error loading guest user:', error)
+          clearGuestUser()
+          return
+        }
+
+        setUser({
+          id: guestUser.id,
+          name: guestUser.name,
+          email: guestUser.email,
+          plan: guestUser.plan,
+          avatar: guestUser.avatar,
+          level: 1,
+          xp: 0,
+          joinDate: new Date(guestUser.created_at)
+        })
+      } catch (err) {
+        console.error('Error checking guest user:', err)
+        clearGuestUser()
+      }
+    }
+  }
 
   const loadUserProfile = async (userId: string) => {
     try {
@@ -128,6 +167,8 @@ export const useAuth = () => {
   const refreshUser = async () => {
     if (supabaseUser) {
       await loadUserProfile(supabaseUser.id)
+    } else {
+      await checkForGuestUser()
     }
   }
 

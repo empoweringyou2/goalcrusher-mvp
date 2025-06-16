@@ -31,6 +31,92 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export { supabase }
 
+// Guest user helper functions
+export const continueAsGuest = async () => {
+  if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+    // For demo mode, create a mock guest user
+    const mockGuestUser = {
+      id: `guest-${Date.now()}`,
+      email: `guest-${Date.now()}@goalcrusher.app`,
+      name: 'Guest User',
+      user_type: 'guest',
+      plan: 'free',
+      avatar: '👤',
+      beta_access: true,
+      created_at: new Date().toISOString()
+    }
+    
+    localStorage.setItem('guest_user_id', mockGuestUser.id)
+    localStorage.setItem('guest_user_data', JSON.stringify(mockGuestUser))
+    
+    return { data: mockGuestUser, error: null }
+  }
+
+  try {
+    // Generate a unique email for the guest user
+    const guestId = crypto.randomUUID()
+    const guestEmail = `guest-${guestId}@goalcrusher.app`
+    
+    const { data, error } = await supabase
+      .from('users')
+      .insert([
+        {
+          email: guestEmail,
+          name: 'Guest User',
+          user_type: 'guest',
+          plan: 'free',
+          avatar: '👤',
+          beta_access: true
+        }
+      ])
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Failed to create guest user:', error)
+      return { data: null, error }
+    }
+
+    // Store guest user ID in localStorage
+    localStorage.setItem('guest_user_id', data.id)
+    
+    return { data, error: null }
+  } catch (err) {
+    console.error('Error creating guest user:', err)
+    return { data: null, error: err }
+  }
+}
+
+export const getGuestUser = async (guestUserId: string) => {
+  if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+    // For demo mode, return mock guest user from localStorage
+    const guestUserData = localStorage.getItem('guest_user_data')
+    if (guestUserData) {
+      return { data: JSON.parse(guestUserData), error: null }
+    }
+    return { data: null, error: { message: 'Guest user not found' } }
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', guestUserId)
+      .eq('user_type', 'guest')
+      .single()
+
+    return { data, error }
+  } catch (err) {
+    console.error('Error fetching guest user:', err)
+    return { data: null, error: err }
+  }
+}
+
+export const clearGuestUser = () => {
+  localStorage.removeItem('guest_user_id')
+  localStorage.removeItem('guest_user_data')
+}
+
 // Auth helper functions
 export const signInWithGoogle = async () => {
   if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
@@ -95,6 +181,9 @@ export const signInWithEmail = async (email: string, password: string) => {
 }
 
 export const signOut = async () => {
+  // Clear guest user data on sign out
+  clearGuestUser()
+  
   const { error } = await supabase.auth.signOut()
   return { error }
 }
@@ -125,7 +214,8 @@ export const createUserProfile = async (userId: string, email: string, name: str
         name,
         avatar: avatar || '🧙‍♂️',
         plan: 'free',
-        beta_access: true
+        beta_access: true,
+        user_type: 'registered'
       }
     ])
     .select()

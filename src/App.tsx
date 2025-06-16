@@ -18,7 +18,6 @@ function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('dashboard');
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
-  const [devBypassAuth, setDevBypassAuth] = useState(false);
   
   const { user, loading, error, isAuthenticated } = useAuth();
   
@@ -27,38 +26,20 @@ function App() {
     version: '1.0.0-beta'
   };
 
-  // Mock user data for development bypass
-  const mockUser = {
-    id: 'dev-user-123',
-    name: 'Goal Crusher',
-    email: 'dev@goalcrusher.app',
-    plan: 'free' as const,
-    avatar: '🧙‍♂️',
-    level: 12,
-    xp: 2450,
-    joinDate: new Date('2024-01-01')
-  };
-
   // Check if we're handling an auth callback
   const isAuthCallback = window.location.pathname === '/auth/callback';
 
   // Check if user has completed onboarding
   useEffect(() => {
-    if ((isAuthenticated && user) || devBypassAuth) {
+    if (isAuthenticated && user) {
       const hasCompletedOnboarding = localStorage.getItem('hasCompletedOnboarding');
       if (!hasCompletedOnboarding) {
         setShowOnboarding(true);
       }
     }
-  }, [isAuthenticated, user, devBypassAuth]);
+  }, [isAuthenticated, user]);
 
   const handleLogin = () => {
-    setCurrentScreen('dashboard');
-    setAuthError(null);
-  };
-
-  const handleBypassLogin = () => {
-    setDevBypassAuth(true);
     setCurrentScreen('dashboard');
     setAuthError(null);
   };
@@ -103,8 +84,8 @@ function App() {
     );
   }
 
-  // Show loading screen while checking auth (but not when bypassing)
-  if (loading && !devBypassAuth) {
+  // Show loading screen while checking auth
+  if (loading) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
         <div className="text-center">
@@ -116,8 +97,8 @@ function App() {
     );
   }
 
-  // Show error screen if there's an auth error (but not when bypassing)
-  if ((error || authError) && !devBypassAuth) {
+  // Show error screen if there's an auth error
+  if (error || authError) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
         <div className="text-center max-w-md">
@@ -138,27 +119,24 @@ function App() {
     );
   }
 
-  // Show welcome screen if not authenticated and not bypassing
-  if (!isAuthenticated && !devBypassAuth) {
+  // Show welcome screen if not authenticated
+  if (!isAuthenticated) {
     return (
       <WelcomeScreen 
         onLogin={handleLogin} 
-        onBypassLogin={handleBypassLogin}
+        onBypassLogin={handleLogin} // Both now use the same handler since guest login is handled in WelcomeScreen
       />
     );
   }
 
-  // Use either real user or mock user data
-  const currentUser = devBypassAuth ? mockUser : user!;
-
-  // Main app for authenticated users or bypassed auth
+  // Main app for authenticated users (including guests)
   return (
     <div className="min-h-screen bg-black text-white">
       <div className="flex flex-col md:flex-row">
         <Navigation 
           currentScreen={currentScreen} 
           onNavigate={navigateTo}
-          user={currentUser}
+          user={user}
           appConfig={appConfig}
         />
         
@@ -166,33 +144,33 @@ function App() {
           {currentScreen === 'dashboard' && (
             <Dashboard 
               onNavigate={navigateTo}
-              user={currentUser}
+              user={user}
               appConfig={appConfig}
             />
           )}
           {currentScreen === 'goal-wizard' && (
             <GoalWizard 
               onNavigate={navigateTo}
-              user={currentUser}
+              user={user}
               appConfig={appConfig}
             />
           )}
           {currentScreen === 'gamification' && (
             <Gamification 
-              user={currentUser}
+              user={user}
               appConfig={appConfig}
             />
           )}
           {currentScreen === 'analytics' && (
             <Analytics 
-              user={currentUser}
+              user={user}
               appConfig={appConfig}
             />
           )}
           {currentScreen === 'settings' && (
             <Settings 
               onStartTutorial={startOnboardingTutorial}
-              user={currentUser}
+              user={user}
               appConfig={appConfig}
               onUpgradeToPro={() => {/* TODO: Implement */}}
               onDowngradeToFree={() => {/* TODO: Implement */}}
@@ -210,10 +188,10 @@ function App() {
         />
       )}
 
-      {/* Development Mode Indicator */}
-      {devBypassAuth && (
-        <div className="fixed bottom-4 left-4 bg-yellow-400/20 border border-yellow-400/40 text-yellow-400 px-3 py-2 rounded-lg text-sm font-medium z-50">
-          🔧 Development Mode - Guest User
+      {/* Guest Mode Indicator */}
+      {user?.email?.includes('guest-') && (
+        <div className="fixed bottom-4 left-4 bg-blue-400/20 border border-blue-400/40 text-blue-400 px-3 py-2 rounded-lg text-sm font-medium z-50">
+          👤 Guest Mode - Your progress is saved locally
         </div>
       )}
     </div>
