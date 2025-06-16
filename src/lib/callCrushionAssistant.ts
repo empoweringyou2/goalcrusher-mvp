@@ -5,7 +5,7 @@ const openai = new OpenAI({
   dangerouslyAllowBrowser: true,
 });
 
-export async function sendToCrushion(userInput: string, threadId?: string) {
+export async function sendToCrushion(userInput: string, userId: string, threadId?: string) {
   try {
     // Create thread (first-time only)
     const thread = threadId
@@ -49,6 +49,12 @@ export async function sendToCrushion(userInput: string, threadId?: string) {
             console.log("Tool call function:", toolCall.function.name);
             console.log("Tool call args:", functionArgs);
             
+            // Add the user_id to the function arguments
+            const augmentedArgs = {
+              ...functionArgs,
+              user_id: userId
+            };
+            
             // Call your Supabase Edge Function
             const result = await fetch("https://opcqlgrzyxrojzmflbez.functions.supabase.co/create_task", {
               method: "POST",
@@ -56,7 +62,7 @@ export async function sendToCrushion(userInput: string, threadId?: string) {
                 "Content-Type": "application/json",
                 "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
               },
-              body: JSON.stringify(functionArgs),
+              body: JSON.stringify(augmentedArgs),
             });
 
             const resultJson = await result.json();

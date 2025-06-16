@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 
 interface CreateTaskRequest {
+  user_id: string
   title: string
   description?: string
   category?: string
@@ -42,6 +43,16 @@ serve(async (req) => {
     const body: CreateTaskRequest = await req.json()
 
     // Validate required fields
+    if (!body.user_id || body.user_id.trim() === '') {
+      return new Response(
+        JSON.stringify({ error: 'user_id is required' }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      )
+    }
+
     if (!body.title || body.title.trim() === '') {
       return new Response(
         JSON.stringify({ error: 'Task title is required' }),
@@ -85,13 +96,26 @@ serve(async (req) => {
       )
     }
 
-    // For this demo, we'll use a valid UUID for the development user
-    // In production, you'd get this from the authenticated user
-    const userId = '00000000-0000-0000-0000-000000000001'
+    // Verify that the user exists in the database
+    const { data: userExists, error: userCheckError } = await supabaseClient
+      .from('users')
+      .select('id')
+      .eq('id', body.user_id)
+      .single()
+
+    if (userCheckError || !userExists) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid user_id - user does not exist' }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      )
+    }
 
     // Prepare task data
     const taskData = {
-      user_id: userId,
+      user_id: body.user_id,
       title: body.title.trim(),
       description: body.description?.trim() || null,
       category: body.category || 'general',
@@ -127,7 +151,7 @@ serve(async (req) => {
       .from('audit_logs')
       .insert([
         {
-          user_id: userId,
+          user_id: body.user_id,
           action: 'task_created',
           resource_type: 'task',
           resource_id: task.id,

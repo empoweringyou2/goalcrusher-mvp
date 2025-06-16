@@ -228,8 +228,8 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
       let response;
       
       if (hasOpenAI) {
-        // Use real OpenAI assistant
-        response = await sendToCrushion(inputValue, threadId);
+        // Use real OpenAI assistant - pass the user ID
+        response = await sendToCrushion(inputValue, user.id, threadId);
         setThreadId(response.threadId);
       } else {
         // Use fallback response
