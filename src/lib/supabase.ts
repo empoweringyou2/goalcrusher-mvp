@@ -34,9 +34,11 @@ export { supabase }
 // Guest user helper functions
 export const continueAsGuest = async () => {
   if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+    console.log('Demo mode: Creating mock guest user')
     // For demo mode, create a mock guest user
+    const guestId = `guest-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
     const mockGuestUser = {
-      id: `guest-${Date.now()}`,
+      id: guestId,
       email: `guest-${Date.now()}@goalcrusher.app`,
       name: 'Guest User',
       user_type: 'guest',
@@ -49,13 +51,18 @@ export const continueAsGuest = async () => {
     localStorage.setItem('guest_user_id', mockGuestUser.id)
     localStorage.setItem('guest_user_data', JSON.stringify(mockGuestUser))
     
+    console.log('Mock guest user created:', mockGuestUser)
     return { data: mockGuestUser, error: null }
   }
 
   try {
+    console.log('Creating real guest user via Supabase...')
     // Generate a unique email for the guest user
-    const guestId = crypto.randomUUID()
-    const guestEmail = `guest-${guestId}@goalcrusher.app`
+    const timestamp = Date.now()
+    const randomId = Math.random().toString(36).substr(2, 9)
+    const guestEmail = `guest-${timestamp}-${randomId}@goalcrusher.app`
+    
+    console.log('Attempting to insert guest user with email:', guestEmail)
     
     const { data, error } = await supabase
       .from('users')
@@ -73,17 +80,54 @@ export const continueAsGuest = async () => {
       .single()
 
     if (error) {
-      console.error('Failed to create guest user:', error)
-      return { data: null, error }
+      console.error('Supabase error creating guest user:', error)
+      
+      // Fallback to local storage if Supabase fails
+      console.log('Falling back to local storage guest user')
+      const fallbackGuestUser = {
+        id: `guest-${timestamp}-${randomId}`,
+        email: guestEmail,
+        name: 'Guest User',
+        user_type: 'guest',
+        plan: 'free',
+        avatar: '👤',
+        beta_access: true,
+        created_at: new Date().toISOString()
+      }
+      
+      localStorage.setItem('guest_user_id', fallbackGuestUser.id)
+      localStorage.setItem('guest_user_data', JSON.stringify(fallbackGuestUser))
+      
+      return { data: fallbackGuestUser, error: null }
     }
 
+    console.log('Guest user created successfully:', data)
     // Store guest user ID in localStorage
     localStorage.setItem('guest_user_id', data.id)
     
     return { data, error: null }
   } catch (err) {
     console.error('Error creating guest user:', err)
-    return { data: null, error: err }
+    
+    // Fallback to local storage
+    console.log('Exception occurred, falling back to local storage guest user')
+    const timestamp = Date.now()
+    const randomId = Math.random().toString(36).substr(2, 9)
+    const fallbackGuestUser = {
+      id: `guest-${timestamp}-${randomId}`,
+      email: `guest-${timestamp}-${randomId}@goalcrusher.app`,
+      name: 'Guest User',
+      user_type: 'guest',
+      plan: 'free',
+      avatar: '👤',
+      beta_access: true,
+      created_at: new Date().toISOString()
+    }
+    
+    localStorage.setItem('guest_user_id', fallbackGuestUser.id)
+    localStorage.setItem('guest_user_data', JSON.stringify(fallbackGuestUser))
+    
+    return { data: fallbackGuestUser, error: null }
   }
 }
 
@@ -98,6 +142,7 @@ export const getGuestUser = async (guestUserId: string) => {
   }
 
   try {
+    // First try to get from Supabase
     const { data, error } = await supabase
       .from('users')
       .select('*')
@@ -105,9 +150,31 @@ export const getGuestUser = async (guestUserId: string) => {
       .eq('user_type', 'guest')
       .single()
 
-    return { data, error }
+    if (error || !data) {
+      // Fallback to localStorage
+      const guestUserData = localStorage.getItem('guest_user_data')
+      if (guestUserData) {
+        const localData = JSON.parse(guestUserData)
+        if (localData.id === guestUserId) {
+          return { data: localData, error: null }
+        }
+      }
+      return { data: null, error: error || { message: 'Guest user not found' } }
+    }
+
+    return { data, error: null }
   } catch (err) {
     console.error('Error fetching guest user:', err)
+    
+    // Fallback to localStorage
+    const guestUserData = localStorage.getItem('guest_user_data')
+    if (guestUserData) {
+      const localData = JSON.parse(guestUserData)
+      if (localData.id === guestUserId) {
+        return { data: localData, error: null }
+      }
+    }
+    
     return { data: null, error: err }
   }
 }

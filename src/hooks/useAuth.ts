@@ -28,6 +28,8 @@ export const useAuth = () => {
       } catch (err) {
         console.error('Error in getInitialSession:', err)
         setError('Failed to load session')
+        // Still check for guest user even if session fails
+        await checkForGuestUser()
       } finally {
         setLoading(false)
       }
@@ -67,6 +69,8 @@ export const useAuth = () => {
 
   const checkForGuestUser = async () => {
     const guestUserId = localStorage.getItem('guest_user_id')
+    console.log('Checking for guest user with ID:', guestUserId)
+    
     if (guestUserId) {
       try {
         const { data: guestUser, error } = await getGuestUser(guestUserId)
@@ -77,6 +81,7 @@ export const useAuth = () => {
           return
         }
 
+        console.log('Guest user loaded:', guestUser)
         setUser({
           id: guestUser.id,
           name: guestUser.name,

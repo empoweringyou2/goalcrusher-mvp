@@ -11,26 +11,34 @@ interface WelcomeScreenProps {
 export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onLogin, onBypassLogin }) => {
   const [showAuthForm, setShowAuthForm] = useState(false);
   const [guestLoading, setGuestLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleGuestLogin = async () => {
     setGuestLoading(true);
+    setError(null);
     
     try {
+      console.log('Starting guest login process...');
       const { data, error } = await continueAsGuest();
       
       if (error) {
         console.error('Failed to create guest user:', error);
-        alert('Could not start as guest. Please try again.');
+        setError('Could not start as guest. Please try again.');
         return;
       }
       
       if (data) {
-        console.log('Guest user created:', data);
-        onLogin(); // Transition to dashboard
+        console.log('Guest user created successfully:', data);
+        // Small delay to ensure the auth state is updated
+        setTimeout(() => {
+          onLogin(); // Transition to dashboard
+        }, 100);
+      } else {
+        setError('Could not create guest account. Please try again.');
       }
     } catch (err) {
       console.error('Unexpected error during guest login:', err);
-      alert('Could not start as guest. Please try again.');
+      setError('An unexpected error occurred. Please try again.');
     } finally {
       setGuestLoading(false);
     }
@@ -52,6 +60,11 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onLogin, onBypassL
             </button>
             
             <div className="border-t border-gray-800 pt-3">
+              {error && (
+                <div className="mb-3 p-2 bg-red-500/10 border border-red-500/20 rounded text-red-400 text-sm">
+                  {error}
+                </div>
+              )}
               <button
                 onClick={handleGuestLogin}
                 disabled={guestLoading}
@@ -62,7 +75,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onLogin, onBypassL
                 ) : (
                   <UserX className="w-4 h-4" />
                 )}
-                Continue as Guest
+                {guestLoading ? 'Creating Guest Account...' : 'Continue as Guest'}
               </button>
             </div>
           </div>
@@ -115,6 +128,13 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onLogin, onBypassL
           <p className="text-lg text-gray-400 mb-12">
             Your journey begins today.
           </p>
+
+          {/* Error message */}
+          {error && (
+            <div className="mb-6 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
+              {error}
+            </div>
+          )}
 
           {/* Main action buttons */}
           <div className="space-y-4">
