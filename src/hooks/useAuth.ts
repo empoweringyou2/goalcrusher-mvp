@@ -21,15 +21,11 @@ export const useAuth = () => {
         } else if (session?.user) {
           setSupabaseUser(session.user)
           await loadUserProfile(session.user.id)
-        } else {
-          // Check for guest user
-          await checkForGuestUser()
         }
+        // Note: We don't check for guest users on initial load anymore
       } catch (err) {
         console.error('Error in getInitialSession:', err)
         setError('Failed to load session')
-        // Still check for guest user even if session fails
-        await checkForGuestUser()
       } finally {
         setLoading(false)
       }
@@ -55,8 +51,7 @@ export const useAuth = () => {
           
           if (event === 'SIGNED_OUT') {
             setUser(null)
-            // Check for guest user after sign out
-            await checkForGuestUser()
+            // Don't automatically check for guest user after sign out
           }
         }
         
@@ -96,6 +91,36 @@ export const useAuth = () => {
         console.error('Error checking guest user:', err)
         clearGuestUser()
       }
+    }
+  }
+
+  // New function to explicitly load guest user (called from WelcomeScreen)
+  const loadGuestUser = async (guestUserId: string) => {
+    try {
+      const { data: guestUser, error } = await getGuestUser(guestUserId)
+      
+      if (error || !guestUser) {
+        console.error('Error loading guest user:', error)
+        clearGuestUser()
+        return false
+      }
+
+      console.log('Guest user loaded:', guestUser)
+      setUser({
+        id: guestUser.id,
+        name: guestUser.name,
+        email: guestUser.email,
+        plan: guestUser.plan,
+        avatar: guestUser.avatar,
+        level: 1,
+        xp: 0,
+        joinDate: new Date(guestUser.created_at)
+      })
+      return true
+    } catch (err) {
+      console.error('Error loading guest user:', err)
+      clearGuestUser()
+      return false
     }
   }
 
@@ -172,9 +197,8 @@ export const useAuth = () => {
   const refreshUser = async () => {
     if (supabaseUser) {
       await loadUserProfile(supabaseUser.id)
-    } else {
-      await checkForGuestUser()
     }
+    // Note: We don't automatically check for guest user here anymore
   }
 
   return {
@@ -183,6 +207,7 @@ export const useAuth = () => {
     loading,
     error,
     refreshUser,
+    loadGuestUser, // New function to explicitly load guest user
     isAuthenticated: !!user
   }
 }

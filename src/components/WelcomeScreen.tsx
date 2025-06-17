@@ -6,9 +6,10 @@ import { continueAsGuest } from '../lib/supabase';
 interface WelcomeScreenProps {
   onLogin: () => void;
   onBypassLogin: () => void;
+  loadGuestUser?: (guestUserId: string) => Promise<boolean>;
 }
 
-export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onLogin, onBypassLogin }) => {
+export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onLogin, onBypassLogin, loadGuestUser }) => {
   const [showAuthForm, setShowAuthForm] = useState(false);
   const [guestLoading, setGuestLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,12 +28,19 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onLogin, onBypassL
         return;
       }
       
-      if (data) {
+      if (data && loadGuestUser) {
         console.log('Guest user created successfully:', data);
-        // Small delay to ensure the auth state is updated
-        setTimeout(() => {
-          onLogin(); // Transition to dashboard
-        }, 100);
+        // Load the guest user into the auth state
+        const success = await loadGuestUser(data.id);
+        
+        if (success) {
+          // Small delay to ensure the auth state is updated
+          setTimeout(() => {
+            onLogin(); // Transition to dashboard
+          }, 100);
+        } else {
+          setError('Could not load guest account. Please try again.');
+        }
       } else {
         setError('Could not create guest account. Please try again.');
       }

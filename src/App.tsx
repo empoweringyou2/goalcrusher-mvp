@@ -19,7 +19,7 @@ function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   
-  const { user, loading, error, isAuthenticated } = useAuth();
+  const { user, loading, error, isAuthenticated, loadGuestUser } = useAuth();
   
   const appConfig: AppConfig = {
     betaAccess: true,
@@ -125,6 +125,7 @@ function App() {
       <WelcomeScreen 
         onLogin={handleLogin} 
         onBypassLogin={handleLogin} // Both now use the same handler since guest login is handled in WelcomeScreen
+        loadGuestUser={loadGuestUser} // Pass the loadGuestUser function
       />
     );
   }
