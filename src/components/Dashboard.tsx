@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Calendar, Clock, Plus, ChevronLeft, ChevronRight, Flame, Zap, Target, Edit3, Save, X, Trash2, Users, Bot, UserCheck, Building } from 'lucide-react';
+import { Calendar, Clock, Plus, ChevronLeft, ChevronRight, Flame, Zap, Target, Edit3, Save, X, Trash2, Users, Bot, UserCheck, Building, Repeat, Link, Sparkles, AlertCircle } from 'lucide-react';
 import { Screen } from '../App';
 import { User, AppConfig } from '../types/user';
 
@@ -11,6 +11,15 @@ interface Task {
   category: string;
   completed: boolean;
   date: Date;
+  goalId?: string;
+  goalTitle?: string;
+  isRecurring?: boolean;
+  recurringPattern?: {
+    type: 'daily' | 'weekly' | 'monthly';
+    interval: number;
+    daysOfWeek?: number[];
+    endDate?: Date;
+  };
   accountability?: {
     type: 'ai' | 'partner' | 'team' | 'public';
     partner?: string;
@@ -18,6 +27,14 @@ interface Task {
     consequences?: string;
     rewards?: string;
   };
+}
+
+interface Goal {
+  id: string;
+  title: string;
+  category: string;
+  color: string;
+  progress: number;
 }
 
 interface DashboardProps {
@@ -33,6 +50,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
   const [editingTask, setEditingTask] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<Partial<Task>>({});
   const [showAccountabilityModal, setShowAccountabilityModal] = useState<number | null>(null);
+  const [showTaskCreationModal, setShowTaskCreationModal] = useState(false);
+  const [showSmartScheduling, setShowSmartScheduling] = useState(false);
+
+  // Mock goals data
+  const [goals] = useState<Goal[]>([
+    { id: 'goal-1', title: 'Launch MVP', category: 'work', color: 'bg-blue-500', progress: 65 },
+    { id: 'goal-2', title: 'Get Fit', category: 'health', color: 'bg-green-500', progress: 40 },
+    { id: 'goal-3', title: 'Learn Spanish', category: 'education', color: 'bg-purple-500', progress: 25 },
+    { id: 'goal-4', title: 'Write Book', category: 'creative', color: 'bg-yellow-500', progress: 15 },
+  ]);
 
   const [tasks, setTasks] = useState<Task[]>([
     { 
@@ -43,6 +70,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
       category: 'wellness', 
       completed: true, 
       date: new Date(),
+      goalId: 'goal-2',
+      goalTitle: 'Get Fit',
       accountability: {
         type: 'partner',
         partner: 'Sarah',
@@ -59,6 +88,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
       category: 'work', 
       completed: false, 
       date: new Date(),
+      goalId: 'goal-1',
+      goalTitle: 'Launch MVP',
       accountability: {
         type: 'team',
         checkInTime: '10:15',
@@ -76,6 +107,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
       category: 'fitness', 
       completed: false, 
       date: new Date(),
+      goalId: 'goal-2',
+      goalTitle: 'Get Fit',
+      isRecurring: true,
+      recurringPattern: {
+        type: 'weekly',
+        interval: 1,
+        daysOfWeek: [1, 3, 5], // Mon, Wed, Fri
+      },
       accountability: {
         type: 'ai',
         checkInTime: '19:30',
@@ -83,10 +122,44 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
         rewards: 'Unlock new fitness achievement'
       }
     },
-    { id: 6, title: 'Read 20 pages', time: '21:15', duration: 30, category: 'growth', completed: false, date: new Date() },
+    { 
+      id: 6, 
+      title: 'Read 20 pages', 
+      time: '21:15', 
+      duration: 30, 
+      category: 'growth', 
+      completed: false, 
+      date: new Date(),
+      goalId: 'goal-4',
+      goalTitle: 'Write Book',
+      isRecurring: true,
+      recurringPattern: {
+        type: 'daily',
+        interval: 1,
+      }
+    },
     { id: 7, title: 'Team Meeting', time: '14:00', duration: 45, category: 'work', completed: false, date: new Date(Date.now() + 86400000) },
     { id: 8, title: 'Yoga Session', time: '08:30', duration: 30, category: 'wellness', completed: false, date: new Date(Date.now() + 86400000) },
   ]);
+
+  // Task Creation Form State
+  const [newTask, setNewTask] = useState({
+    title: '',
+    description: '',
+    duration: 30,
+    category: 'work',
+    priority: 'medium' as 'low' | 'medium' | 'high',
+    goalId: '',
+    isRecurring: false,
+    recurringPattern: {
+      type: 'daily' as 'daily' | 'weekly' | 'monthly',
+      interval: 1,
+      daysOfWeek: [] as number[],
+      endDate: undefined as Date | undefined,
+    },
+    schedulingPreference: 'manual' as 'manual' | 'smart',
+    preferredTimeSlots: [] as string[],
+  });
 
   const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -172,6 +245,56 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
     }
   };
 
+  // Smart Scheduling Functions
+  const generateSmartSchedulingSuggestions = () => {
+    const suggestions = [];
+    const today = new Date();
+    
+    // Analyze existing tasks to find patterns
+    const existingTasks = tasks.filter(task => 
+      task.date.toDateString() === today.toDateString()
+    );
+
+    // Find free time slots
+    const busySlots = existingTasks.map(task => ({
+      start: timeToMinutes(task.time),
+      end: timeToMinutes(task.time) + task.duration
+    }));
+
+    // Generate suggestions based on task type and user patterns
+    if (newTask.category === 'work') {
+      suggestions.push(
+        { time: '09:00', reason: 'Peak productivity hours for work tasks' },
+        { time: '14:00', reason: 'Post-lunch focus time' },
+        { time: '10:30', reason: 'Mid-morning energy boost' }
+      );
+    } else if (newTask.category === 'wellness') {
+      suggestions.push(
+        { time: '07:00', reason: 'Morning routine for wellness habits' },
+        { time: '18:30', reason: 'Evening wind-down time' },
+        { time: '12:30', reason: 'Midday wellness break' }
+      );
+    } else if (newTask.category === 'fitness') {
+      suggestions.push(
+        { time: '06:30', reason: 'Early morning energy for workouts' },
+        { time: '17:30', reason: 'After-work fitness routine' },
+        { time: '12:00', reason: 'Lunch break workout' }
+      );
+    }
+
+    // Filter out busy times and return available suggestions
+    return suggestions.filter(suggestion => {
+      const suggestionStart = timeToMinutes(suggestion.time);
+      const suggestionEnd = suggestionStart + newTask.duration;
+      
+      return !busySlots.some(busy => 
+        (suggestionStart >= busy.start && suggestionStart < busy.end) ||
+        (suggestionEnd > busy.start && suggestionEnd <= busy.end) ||
+        (suggestionStart <= busy.start && suggestionEnd >= busy.end)
+      );
+    }).slice(0, 3);
+  };
+
   // Drag and Drop Functions
   const handleDragStart = (e: React.DragEvent, task: Task) => {
     setDraggedTask(task);
@@ -199,6 +322,94 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
       )
     );
     setDraggedTask(null);
+  };
+
+  // Task Creation Functions
+  const handleCreateTask = () => {
+    if (!newTask.title.trim()) return;
+
+    const taskId = Date.now();
+    const baseTask: Task = {
+      id: taskId,
+      title: newTask.title,
+      time: newTask.preferredTimeSlots[0] || '09:00',
+      duration: newTask.duration,
+      category: newTask.category,
+      completed: false,
+      date: new Date(),
+      goalId: newTask.goalId || undefined,
+      goalTitle: newTask.goalId ? goals.find(g => g.id === newTask.goalId)?.title : undefined,
+      isRecurring: newTask.isRecurring,
+      recurringPattern: newTask.isRecurring ? newTask.recurringPattern : undefined,
+    };
+
+    if (newTask.isRecurring && newTask.recurringPattern) {
+      // Create recurring tasks
+      const recurringTasks = generateRecurringTasks(baseTask);
+      setTasks(prevTasks => [...prevTasks, ...recurringTasks]);
+    } else {
+      // Create single task
+      setTasks(prevTasks => [...prevTasks, baseTask]);
+    }
+
+    // Reset form
+    setNewTask({
+      title: '',
+      description: '',
+      duration: 30,
+      category: 'work',
+      priority: 'medium',
+      goalId: '',
+      isRecurring: false,
+      recurringPattern: {
+        type: 'daily',
+        interval: 1,
+        daysOfWeek: [],
+        endDate: undefined,
+      },
+      schedulingPreference: 'manual',
+      preferredTimeSlots: [],
+    });
+    setShowTaskCreationModal(false);
+  };
+
+  const generateRecurringTasks = (baseTask: Task): Task[] => {
+    const tasks: Task[] = [];
+    const pattern = baseTask.recurringPattern!;
+    const startDate = new Date();
+    const endDate = pattern.endDate || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // 90 days default
+
+    let currentDate = new Date(startDate);
+    let taskId = baseTask.id;
+
+    while (currentDate <= endDate && tasks.length < 50) { // Limit to 50 occurrences
+      let shouldCreateTask = false;
+
+      if (pattern.type === 'daily') {
+        shouldCreateTask = true;
+      } else if (pattern.type === 'weekly') {
+        if (pattern.daysOfWeek && pattern.daysOfWeek.includes(currentDate.getDay())) {
+          shouldCreateTask = true;
+        }
+      } else if (pattern.type === 'monthly') {
+        if (currentDate.getDate() === startDate.getDate()) {
+          shouldCreateTask = true;
+        }
+      }
+
+      if (shouldCreateTask) {
+        tasks.push({
+          ...baseTask,
+          id: taskId++,
+          date: new Date(currentDate),
+        });
+      }
+
+      // Move to next day
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    return tasks;
   };
 
   // Task Editing Functions
@@ -509,6 +720,320 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
     );
   };
 
+  // Enhanced Task Creation Modal
+  const TaskCreationModal = () => {
+    const smartSuggestions = generateSmartSchedulingSuggestions();
+
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="bg-gray-900 rounded-xl border border-gray-800 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="p-6 border-b border-gray-800">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-semibold text-white flex items-center gap-2">
+                <Plus className="w-5 h-5 text-yellow-400" />
+                Create New Task
+              </h3>
+              <button
+                onClick={() => setShowTaskCreationModal(false)}
+                className="p-1 hover:bg-gray-800 rounded"
+              >
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+          </div>
+          
+          <div className="p-6 space-y-6">
+            {/* Basic Task Info */}
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Task Title</label>
+                <input
+                  type="text"
+                  value={newTask.title}
+                  onChange={(e) => setNewTask({...newTask, title: e.target.value})}
+                  className="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 focus:border-yellow-400 focus:outline-none"
+                  placeholder="What do you want to accomplish?"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Duration (minutes)</label>
+                  <input
+                    type="number"
+                    value={newTask.duration}
+                    onChange={(e) => setNewTask({...newTask, duration: parseInt(e.target.value)})}
+                    className="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 focus:border-yellow-400 focus:outline-none"
+                    min="5"
+                    max="480"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Category</label>
+                  <select
+                    value={newTask.category}
+                    onChange={(e) => setNewTask({...newTask, category: e.target.value})}
+                    className="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 focus:border-yellow-400 focus:outline-none"
+                  >
+                    <option value="work">Work</option>
+                    <option value="wellness">Wellness</option>
+                    <option value="fitness">Fitness</option>
+                    <option value="growth">Growth</option>
+                    <option value="personal">Personal</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Priority</label>
+                  <select
+                    value={newTask.priority}
+                    onChange={(e) => setNewTask({...newTask, priority: e.target.value as 'low' | 'medium' | 'high'})}
+                    className="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 focus:border-yellow-400 focus:outline-none"
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Goal Linking */}
+            <div className="bg-gray-800 rounded-lg p-4">
+              <h4 className="text-white font-medium mb-3 flex items-center gap-2">
+                <Link className="w-4 h-4 text-blue-400" />
+                Link to Goal (Optional)
+              </h4>
+              <select
+                value={newTask.goalId}
+                onChange={(e) => setNewTask({...newTask, goalId: e.target.value})}
+                className="w-full bg-gray-700 text-white px-3 py-2 rounded border border-gray-600 focus:border-yellow-400 focus:outline-none"
+              >
+                <option value="">No goal selected</option>
+                {goals.map(goal => (
+                  <option key={goal.id} value={goal.id}>
+                    {goal.title} ({goal.progress}% complete)
+                  </option>
+                ))}
+              </select>
+              {newTask.goalId && (
+                <div className="mt-2 p-2 bg-blue-500/10 border border-blue-500/20 rounded">
+                  <p className="text-blue-400 text-sm">
+                    This task will contribute to your "{goals.find(g => g.id === newTask.goalId)?.title}" goal
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Recurring Options */}
+            <div className="bg-gray-800 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <input
+                  type="checkbox"
+                  id="isRecurring"
+                  checked={newTask.isRecurring}
+                  onChange={(e) => setNewTask({...newTask, isRecurring: e.target.checked})}
+                  className="w-4 h-4 text-yellow-400 bg-gray-700 border-gray-600 rounded focus:ring-yellow-400"
+                />
+                <label htmlFor="isRecurring" className="text-white font-medium flex items-center gap-2">
+                  <Repeat className="w-4 h-4 text-green-400" />
+                  Make this a recurring task
+                </label>
+              </div>
+
+              {newTask.isRecurring && (
+                <div className="space-y-4 mt-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">Repeat</label>
+                      <select
+                        value={newTask.recurringPattern.type}
+                        onChange={(e) => setNewTask({
+                          ...newTask,
+                          recurringPattern: {
+                            ...newTask.recurringPattern,
+                            type: e.target.value as 'daily' | 'weekly' | 'monthly'
+                          }
+                        })}
+                        className="w-full bg-gray-700 text-white px-3 py-2 rounded border border-gray-600 focus:border-yellow-400 focus:outline-none"
+                      >
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">Every</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          value={newTask.recurringPattern.interval}
+                          onChange={(e) => setNewTask({
+                            ...newTask,
+                            recurringPattern: {
+                              ...newTask.recurringPattern,
+                              interval: parseInt(e.target.value)
+                            }
+                          })}
+                          className="w-20 bg-gray-700 text-white px-3 py-2 rounded border border-gray-600 focus:border-yellow-400 focus:outline-none"
+                          min="1"
+                        />
+                        <span className="text-gray-400">
+                          {newTask.recurringPattern.type === 'daily' ? 'day(s)' :
+                           newTask.recurringPattern.type === 'weekly' ? 'week(s)' : 'month(s)'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {newTask.recurringPattern.type === 'weekly' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">Days of the week</label>
+                      <div className="flex gap-2">
+                        {weekDays.map((day, index) => (
+                          <button
+                            key={day}
+                            onClick={() => {
+                              const daysOfWeek = newTask.recurringPattern.daysOfWeek || [];
+                              const newDaysOfWeek = daysOfWeek.includes(index)
+                                ? daysOfWeek.filter(d => d !== index)
+                                : [...daysOfWeek, index];
+                              setNewTask({
+                                ...newTask,
+                                recurringPattern: {
+                                  ...newTask.recurringPattern,
+                                  daysOfWeek: newDaysOfWeek
+                                }
+                              });
+                            }}
+                            className={`px-3 py-2 rounded text-sm font-medium transition-colors ${
+                              newTask.recurringPattern.daysOfWeek?.includes(index)
+                                ? 'bg-yellow-400 text-black'
+                                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                            }`}
+                          >
+                            {day.slice(0, 3)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">End date (optional)</label>
+                    <input
+                      type="date"
+                      value={newTask.recurringPattern.endDate?.toISOString().split('T')[0] || ''}
+                      onChange={(e) => setNewTask({
+                        ...newTask,
+                        recurringPattern: {
+                          ...newTask.recurringPattern,
+                          endDate: e.target.value ? new Date(e.target.value) : undefined
+                        }
+                      })}
+                      className="w-full bg-gray-700 text-white px-3 py-2 rounded border border-gray-600 focus:border-yellow-400 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Smart Scheduling */}
+            <div className="bg-gray-800 rounded-lg p-4">
+              <h4 className="text-white font-medium mb-3 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-purple-400" />
+                Smart Scheduling
+              </h4>
+              
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    id="manual"
+                    name="scheduling"
+                    checked={newTask.schedulingPreference === 'manual'}
+                    onChange={() => setNewTask({...newTask, schedulingPreference: 'manual'})}
+                    className="w-4 h-4 text-yellow-400 bg-gray-700 border-gray-600"
+                  />
+                  <label htmlFor="manual" className="text-white">Manual scheduling</label>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    id="smart"
+                    name="scheduling"
+                    checked={newTask.schedulingPreference === 'smart'}
+                    onChange={() => setNewTask({...newTask, schedulingPreference: 'smart'})}
+                    className="w-4 h-4 text-yellow-400 bg-gray-700 border-gray-600"
+                  />
+                  <label htmlFor="smart" className="text-white">Use smart suggestions</label>
+                </div>
+
+                {newTask.schedulingPreference === 'smart' && smartSuggestions.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    <p className="text-sm text-gray-400">Recommended time slots:</p>
+                    {smartSuggestions.map((suggestion, index) => (
+                      <button
+                        key={index}
+                        onClick={() => setNewTask({
+                          ...newTask,
+                          preferredTimeSlots: [suggestion.time]
+                        })}
+                        className={`w-full text-left p-3 rounded border transition-colors ${
+                          newTask.preferredTimeSlots.includes(suggestion.time)
+                            ? 'border-yellow-400 bg-yellow-400/10'
+                            : 'border-gray-600 hover:border-gray-500'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-white font-medium">{suggestion.time}</span>
+                          <span className="text-xs text-gray-400">{suggestion.reason}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {newTask.schedulingPreference === 'smart' && smartSuggestions.length === 0 && (
+                  <div className="mt-4 p-3 bg-orange-500/10 border border-orange-500/20 rounded">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 text-orange-400" />
+                      <span className="text-orange-400 text-sm">
+                        No optimal time slots found. Your schedule is quite busy today!
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="p-6 border-t border-gray-800">
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowTaskCreationModal(false)}
+                className="flex-1 bg-gray-700 text-white py-2 px-4 rounded-lg font-medium hover:bg-gray-600 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateTask}
+                disabled={!newTask.title.trim()}
+                className="flex-1 bg-yellow-400 text-black py-2 px-4 rounded-lg font-medium hover:bg-yellow-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Create Task
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderDayView = () => (
     <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
       {/* Header */}
@@ -647,12 +1172,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
                       <div className="flex items-center gap-1">
                         <div className={`font-medium leading-tight flex-1 ${task.completed ? 'line-through' : ''}`}>
                           {task.title}
+                          {task.isRecurring && <Repeat className="w-3 h-3 inline ml-1 opacity-75" />}
+                          {task.goalId && <Link className="w-3 h-3 inline ml-1 opacity-75" />}
                         </div>
                       </div>
                       
                       {heightInPixels > 24 && (
                         <div className="text-xs opacity-75 mt-0.5">
                           {task.time} • {task.duration}min
+                          {task.goalTitle && (
+                            <div className="text-xs opacity-60 mt-0.5">
+                              📌 {task.goalTitle}
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -786,6 +1318,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
                           <div className="flex items-center gap-1">
                             <div className={`font-medium flex-1 ${task.completed ? 'line-through' : ''}`}>
                               {task.title}
+                              {task.isRecurring && <Repeat className="w-2 h-2 inline ml-1" />}
+                              {task.goalId && <Link className="w-2 h-2 inline ml-1" />}
                             </div>
                           </div>
                           <div className="text-xs opacity-75">{task.duration}min</div>
@@ -882,7 +1416,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
                         onDragStart={(e) => handleDragStart(e, task)}
                         className={`text-xs p-1 rounded cursor-move hover:scale-105 transition-transform ${getCategoryColor(task.category)} text-white`}
                       >
-                        <div className="truncate">{task.title}</div>
+                        <div className="truncate flex items-center gap-1">
+                          {task.title}
+                          {task.isRecurring && <Repeat className="w-2 h-2" />}
+                          {task.goalId && <Link className="w-2 h-2" />}
+                        </div>
                         {task.accountability && accountabilityInfo && (
                           <div className="flex items-center gap-1 mt-1">
                             <accountabilityInfo.icon className="w-2 h-2" />
@@ -937,6 +1475,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
                     return (
                       <div key={task.id} className="text-xs text-gray-300 truncate flex items-center gap-1">
                         <span className="flex-1">{task.title}</span>
+                        {task.isRecurring && <Repeat className="w-2 h-2 opacity-75" />}
+                        {task.goalId && <Link className="w-2 h-2 opacity-75" />}
                         {task.accountability && accountabilityInfo && (
                           <accountabilityInfo.icon className="w-2 h-2 opacity-75" />
                         )}
@@ -972,12 +1512,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
                       <h4 className={`font-medium text-white ${task.completed ? 'line-through opacity-50' : ''}`}>
                         {task.title}
                       </h4>
+                      {task.isRecurring && <Repeat className="w-4 h-4 text-green-400" title="Recurring task" />}
+                      {task.goalId && <Link className="w-4 h-4 text-blue-400" title={`Linked to: ${task.goalTitle}`} />}
                     </div>
                     <div className="flex items-center gap-4 text-sm text-gray-400 mt-1">
                       <span>{task.date.toLocaleDateString()}</span>
                       <span>{task.time}</span>
                       <span>{task.duration} min</span>
                       <span className="capitalize">{task.category}</span>
+                      {task.goalTitle && (
+                        <span className="text-blue-400">📌 {task.goalTitle}</span>
+                      )}
                     </div>
                     
                     {/* Accountability Button in Schedule View */}
@@ -1049,13 +1594,22 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
           <p className="text-gray-400">Ready to make today legendary?</p>
         </div>
         
-        <button
-          onClick={() => onNavigate('goal-wizard')}
-          className="bg-yellow-400 text-black px-4 md:px-6 py-2 md:py-3 rounded-xl font-semibold hover:bg-yellow-300 transition-colors flex items-center gap-2 w-fit"
-        >
-          <Plus className="w-4 md:w-5 h-4 md:h-5" />
-          <span className="text-sm md:text-base">Add Goal</span>
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowTaskCreationModal(true)}
+            className="bg-yellow-400 text-black px-4 md:px-6 py-2 md:py-3 rounded-xl font-semibold hover:bg-yellow-300 transition-colors flex items-center gap-2 w-fit"
+          >
+            <Plus className="w-4 md:w-5 h-4 md:h-5" />
+            <span className="text-sm md:text-base">Create Task</span>
+          </button>
+          <button
+            onClick={() => onNavigate('goal-wizard')}
+            className="bg-gray-700 text-white px-4 md:px-6 py-2 md:py-3 rounded-xl font-semibold hover:bg-gray-600 transition-colors flex items-center gap-2 w-fit"
+          >
+            <Target className="w-4 md:w-5 h-4 md:h-5" />
+            <span className="text-sm md:text-base">Add Goal</span>
+          </button>
+        </div>
       </div>
 
       {/* Ultra Micro Stats Cards */}
@@ -1143,6 +1697,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
 
       {/* Dynamic Calendar View */}
       {renderCalendarView()}
+
+      {/* Task Creation Modal */}
+      {showTaskCreationModal && <TaskCreationModal />}
 
       {/* Accountability Modal */}
       {showAccountabilityModal && (
