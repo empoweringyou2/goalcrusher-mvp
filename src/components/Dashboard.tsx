@@ -2,17 +2,16 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Calendar, Clock, Plus, ChevronLeft, ChevronRight, Flame, Zap, Target, Edit3, Save, X, Trash2, Users, Bot, UserCheck, Building } from 'lucide-react';
 import { Screen } from '../App';
 import { User, AppConfig } from '../types/user';
-import { markTaskComplete } from '../lib/supabase';
 
 interface Task {
-  id: string; // Changed from number to string
+  id: string;
   title: string;
   time: string;
   duration: number;
   category: string;
   completed: boolean;
   date: Date;
-  completed_at?: Date; // Added completed_at property
+  completed_at?: Date;
   accountability?: {
     type: 'ai' | 'partner' | 'team' | 'public';
     partner?: string;
@@ -20,6 +19,14 @@ interface Task {
     consequences?: string;
     rewards?: string;
   };
+}
+
+interface NewTask {
+  title: string;
+  time: string;
+  duration: number;
+  category: string;
+  description?: string;
 }
 
 interface DashboardProps {
@@ -32,13 +39,25 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
   const [currentView, setCurrentView] = useState<'day' | 'week' | 'month' | 'year' | 'schedule'>('day');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [draggedTask, setDraggedTask] = useState<Task | null>(null);
-  const [editingTask, setEditingTask] = useState<string | null>(null); // Changed to string
+  const [editingTask, setEditingTask] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<Task>>({});
-  const [showAccountabilityModal, setShowAccountabilityModal] = useState<string | null>(null); // Changed to string
+  const [showAccountabilityModal, setShowAccountabilityModal] = useState<string | null>(null);
+  
+  // New task creation state
+  const [showNewTaskModal, setShowNewTaskModal] = useState(false);
+  const [newTaskTime, setNewTaskTime] = useState('');
+  const [newTaskDate, setNewTaskDate] = useState<Date>(new Date());
+  const [newTaskForm, setNewTaskForm] = useState<NewTask>({
+    title: '',
+    time: '',
+    duration: 30,
+    category: 'general',
+    description: ''
+  });
 
   const [tasks, setTasks] = useState<Task[]>([
     { 
-      id: '1', // Changed to string
+      id: '1', 
       title: 'Morning Meditation', 
       time: '07:00', 
       duration: 20, 
@@ -55,7 +74,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
       }
     },
     { 
-      id: '2', // Changed to string
+      id: '2', 
       title: 'Project Review', 
       time: '09:15', 
       duration: 60, 
@@ -126,6 +145,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
       work: 'bg-blue-500',
       fitness: 'bg-red-500',
       growth: 'bg-purple-500',
+      general: 'bg-gray-500',
     };
     return colors[category as keyof typeof colors] || 'bg-gray-500';
   };
@@ -173,6 +193,69 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
           buttonColor: 'bg-gray-500 hover:bg-gray-600'
         };
     }
+  };
+
+  // Task creation functions
+  const handleTimeSlotClick = (timeString: string, date: Date) => {
+    // Don't create task if there's already a task at this time
+    const existingTask = tasks.find(task => 
+      task.time === timeString && 
+      task.date.toDateString() === date.toDateString()
+    );
+    
+    if (existingTask) return;
+
+    setNewTaskTime(timeString);
+    setNewTaskDate(date);
+    setNewTaskForm({
+      title: '',
+      time: timeString,
+      duration: 30,
+      category: 'general',
+      description: ''
+    });
+    setShowNewTaskModal(true);
+  };
+
+  const handleCreateTask = async () => {
+    if (!newTaskForm.title.trim()) return;
+
+    const newTask: Task = {
+      id: Date.now().toString(),
+      title: newTaskForm.title,
+      time: newTaskForm.time,
+      duration: newTaskForm.duration,
+      category: newTaskForm.category,
+      completed: false,
+      date: newTaskDate
+    };
+
+    // Add to local state
+    setTasks(prev => [...prev, newTask]);
+
+    // Here you would typically call your backend API to create the task
+    console.log('Creating new task:', newTask);
+
+    // Reset form and close modal
+    setNewTaskForm({
+      title: '',
+      time: '',
+      duration: 30,
+      category: 'general',
+      description: ''
+    });
+    setShowNewTaskModal(false);
+  };
+
+  const handleCancelNewTask = () => {
+    setNewTaskForm({
+      title: '',
+      time: '',
+      duration: 30,
+      category: 'general',
+      description: ''
+    });
+    setShowNewTaskModal(false);
   };
 
   // Drag and Drop Functions
@@ -234,67 +317,49 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
     setEditForm({});
   };
 
-  const deleteTask = (taskId: string) => { // Changed parameter type to string
+  const deleteTask = (taskId: string) => {
     setTasks(prevTasks => prevTasks.filter(task => task.id !== taskId));
   };
 
-  // Updated toggleTaskComplete function with backend integration
   const toggleTaskComplete = async (taskId: string) => {
-    // Find the task in local state
     const task = tasks.find(t => t.id === taskId);
-    if (!task) return;
-
-    // If task is already completed, don't allow unchecking (backend only supports marking complete)
-    if (task.completed) {
-      console.log('Task is already completed');
-      return;
-    }
+    if (!task || task.completed) return; // Don't allow unchecking completed tasks
 
     try {
-      console.log('Marking task complete:', taskId);
-      
       // Call the backend function to mark task complete
-      const { data, error } = await markTaskComplete(taskId, user.id, 'manual');
-      
-      if (error) {
-        console.error('Error marking task complete:', error);
-        // You could show a toast notification here
+      const { markTaskComplete } = await import('../lib/supabase');
+      const result = await markTaskComplete(taskId, user.id);
+
+      if (result.error) {
+        console.error('Failed to mark task complete:', result.error);
         return;
       }
 
-      console.log('Task completion response:', data);
+      console.log('Task completion result:', result.data);
+      if (result.data?.xp_gained) {
+        console.log(`🎉 Task completed! +${result.data.xp_gained} XP gained!`);
+      }
 
-      // Update local state on success
+      // Update local state
       setTasks(prevTasks =>
         prevTasks.map(t =>
           t.id === taskId
-            ? { 
-                ...t, 
-                completed: true, 
-                completed_at: new Date() 
-              }
+            ? { ...t, completed: true, completed_at: new Date() }
             : t
         )
       );
-
-      // Show success feedback (you could replace this with a toast notification)
-      if (data?.xp_gained) {
-        console.log(`Task completed! +${data.xp_gained} XP gained`);
-      }
-
-    } catch (err) {
-      console.error('Unexpected error marking task complete:', err);
-      // You could show an error toast notification here
+    } catch (error) {
+      console.error('Error marking task complete:', error);
     }
   };
 
-  const handleCheckIn = (taskId: string) => { // Changed parameter type to string
+  const handleCheckIn = (taskId: string) => {
     // Simulate check-in action
     alert('Check-in recorded! Great job staying accountable! 🎉');
     setShowAccountabilityModal(null);
   };
 
-  const handleEditAccountability = (taskId: string) => { // Changed parameter type to string
+  const handleEditAccountability = (taskId: string) => {
     // This would open an accountability editing modal/form
     alert('Opening accountability editor... (Feature coming soon!)');
     setShowAccountabilityModal(null);
@@ -552,6 +617,118 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
     );
   };
 
+  // New Task Creation Modal
+  const NewTaskModal = () => (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-gray-900 rounded-xl border border-gray-800 max-w-md w-full">
+        <div className="p-4 border-b border-gray-800">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+              <Plus className="w-5 h-5 text-yellow-400" />
+              Create New Task
+            </h3>
+            <button
+              onClick={handleCancelNewTask}
+              className="p-1 hover:bg-gray-800 rounded"
+            >
+              <X className="w-5 h-5 text-gray-400" />
+            </button>
+          </div>
+        </div>
+        
+        <div className="p-4 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Task Title
+            </label>
+            <input
+              type="text"
+              value={newTaskForm.title}
+              onChange={(e) => setNewTaskForm({...newTaskForm, title: e.target.value})}
+              placeholder="What do you want to accomplish?"
+              className="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 focus:border-yellow-400 focus:outline-none"
+              autoFocus
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Time
+              </label>
+              <input
+                type="time"
+                value={newTaskForm.time}
+                onChange={(e) => setNewTaskForm({...newTaskForm, time: e.target.value})}
+                className="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 focus:border-yellow-400 focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Duration (min)
+              </label>
+              <input
+                type="number"
+                value={newTaskForm.duration}
+                onChange={(e) => setNewTaskForm({...newTaskForm, duration: parseInt(e.target.value) || 30})}
+                min="5"
+                max="480"
+                className="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 focus:border-yellow-400 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Category
+            </label>
+            <select
+              value={newTaskForm.category}
+              onChange={(e) => setNewTaskForm({...newTaskForm, category: e.target.value})}
+              className="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 focus:border-yellow-400 focus:outline-none"
+            >
+              <option value="general">General</option>
+              <option value="work">Work</option>
+              <option value="wellness">Wellness</option>
+              <option value="fitness">Fitness</option>
+              <option value="growth">Growth</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Description (optional)
+            </label>
+            <textarea
+              value={newTaskForm.description}
+              onChange={(e) => setNewTaskForm({...newTaskForm, description: e.target.value})}
+              placeholder="Add any additional details..."
+              rows={3}
+              className="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 focus:border-yellow-400 focus:outline-none resize-none"
+            />
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button
+              onClick={handleCancelNewTask}
+              className="flex-1 bg-gray-700 text-white py-2 px-4 rounded-lg font-medium hover:bg-gray-600 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleCreateTask}
+              disabled={!newTaskForm.title.trim()}
+              className="flex-1 bg-yellow-400 text-black py-2 px-4 rounded-lg font-medium hover:bg-yellow-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Create Task
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   const renderDayView = () => (
     <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
       {/* Header */}
@@ -584,17 +761,30 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
 
           {/* Tasks column */}
           <div className="relative">
-            {/* Background grid with drop zones */}
-            {timeSlots.map((slot, index) => (
-              <div
-                key={`bg-${slot.hour}-${slot.minute}`}
-                className={`h-4 border-b border-gray-800/30 hover:bg-gray-800/20 transition-colors ${
-                  slot.minute === 0 ? 'border-gray-700' : ''
-                }`}
-                onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, slot.timeString, currentDate)}
-              />
-            ))}
+            {/* Background grid with drop zones and click handlers */}
+            {timeSlots.map((slot, index) => {
+              const hasTask = tasks.some(task => 
+                task.time === slot.timeString && 
+                task.date.toDateString() === currentDate.toDateString()
+              );
+
+              return (
+                <div
+                  key={`bg-${slot.hour}-${slot.minute}`}
+                  className={`h-4 border-b border-gray-800/30 transition-colors cursor-pointer ${
+                    slot.minute === 0 ? 'border-gray-700' : ''
+                  } ${
+                    hasTask 
+                      ? 'hover:bg-gray-800/10' 
+                      : 'hover:bg-yellow-400/10 hover:border-yellow-400/20'
+                  }`}
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, slot.timeString, currentDate)}
+                  onClick={() => !hasTask && handleTimeSlotClick(slot.timeString, currentDate)}
+                  title={hasTask ? '' : `Click to create task at ${slot.timeString}`}
+                />
+              );
+            })}
 
             {/* Tasks positioned absolutely */}
             {tasks
@@ -647,6 +837,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
                             <option value="wellness">Wellness</option>
                             <option value="fitness">Fitness</option>
                             <option value="growth">Growth</option>
+                            <option value="general">General</option>
                           </select>
                         </div>
                         <div className="flex gap-2">
@@ -688,26 +879,25 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
                   >
                     <div className="p-1 h-full flex flex-col justify-between relative">
                       <div className="flex items-center gap-1">
-                        <div className={`font-medium leading-tight flex-1 ${task.completed ? 'line-through' : ''}`}>
-                          {task.title}
-                        </div>
-                        {/* Completion Checkbox */}
                         <input
                           type="checkbox"
                           checked={task.completed}
                           onChange={() => toggleTaskComplete(task.id)}
                           disabled={task.completed}
-                          className="w-3 h-3 rounded border-white/30 text-white focus:ring-white/50 bg-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="w-3 h-3 rounded border-gray-300 text-yellow-400 focus:ring-yellow-400 focus:ring-1 flex-shrink-0"
                           onClick={(e) => e.stopPropagation()}
                         />
+                        <div className={`font-medium leading-tight flex-1 ${task.completed ? 'line-through' : ''}`}>
+                          {task.title}
+                        </div>
                       </div>
                       
                       {heightInPixels > 24 && (
-                        <div className="text-xs opacity-75 mt-0.5">
-                          {task.time} • {task.duration}min
+                        <div className="text-xs opacity-75 mt-0.5 flex items-center justify-between">
+                          <span>{task.time} • {task.duration}min</span>
                           {task.completed && task.completed_at && (
-                            <span className="block text-green-300">
-                              ✓ Completed {task.completed_at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            <span className="text-green-300">
+                              ✓ {task.completed_at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </span>
                           )}
                         </div>
@@ -818,9 +1008,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
               return (
                 <div 
                   key={`${day}-${hour}`} 
-                  className="border-r border-gray-800 last:border-r-0 p-2 relative hover:bg-gray-800/20 transition-colors"
+                  className="border-r border-gray-800 last:border-r-0 p-2 relative hover:bg-gray-800/20 transition-colors cursor-pointer"
                   onDragOver={handleDragOver}
                   onDrop={(e) => handleDrop(e, hourTime, dayDate)}
+                  onClick={() => handleTimeSlotClick(hourTime, dayDate)}
+                  title={`Click to create task at ${hourTime}`}
                 >
                   {tasks
                     .filter(task => 
@@ -841,18 +1033,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
                           style={{ height: `${Math.min(task.duration, 50)}px` }}
                         >
                           <div className="flex items-center gap-1">
-                            <div className={`font-medium flex-1 ${task.completed ? 'line-through' : ''}`}>
-                              {task.title}
-                            </div>
-                            {/* Completion Checkbox for Week View */}
                             <input
                               type="checkbox"
                               checked={task.completed}
                               onChange={() => toggleTaskComplete(task.id)}
                               disabled={task.completed}
-                              className="w-3 h-3 rounded border-white/30 text-white focus:ring-white/50 bg-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="w-3 h-3 rounded border-gray-300 text-yellow-400 focus:ring-yellow-400 focus:ring-1 flex-shrink-0"
                               onClick={(e) => e.stopPropagation()}
                             />
+                            <div className={`font-medium flex-1 ${task.completed ? 'line-through' : ''}`}>
+                              {task.title}
+                            </div>
                           </div>
                           <div className="text-xs opacity-75">{task.duration}min</div>
                           
@@ -926,11 +1117,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
             return (
               <div
                 key={index}
-                className={`min-h-[80px] p-2 border-r border-b border-gray-800 last:border-r-0 hover:bg-gray-800/20 transition-colors ${
+                className={`min-h-[80px] p-2 border-r border-b border-gray-800 last:border-r-0 hover:bg-gray-800/20 transition-colors cursor-pointer ${
                   !isCurrentMonth ? 'bg-gray-800/50' : ''
                 }`}
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, '09:00', day)}
+                onClick={() => handleTimeSlotClick('09:00', day)}
+                title={`Click to create task on ${day.toLocaleDateString()}`}
               >
                 <div className={`text-sm font-medium mb-1 ${
                   isToday ? 'text-yellow-400' : isCurrentMonth ? 'text-white' : 'text-gray-500'
@@ -948,22 +1141,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
                         onDragStart={(e) => handleDragStart(e, task)}
                         className={`text-xs p-1 rounded cursor-move hover:scale-105 transition-transform ${getCategoryColor(task.category)} text-white flex items-center gap-1`}
                       >
-                        <div className={`truncate flex-1 ${task.completed ? 'line-through opacity-60' : ''}`}>
-                          {task.title}
-                        </div>
                         <input
                           type="checkbox"
                           checked={task.completed}
                           onChange={() => toggleTaskComplete(task.id)}
                           disabled={task.completed}
-                          className="w-2 h-2 rounded border-white/30 text-white focus:ring-white/50 bg-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="w-2 h-2 rounded border-gray-300 text-yellow-400 focus:ring-yellow-400 focus:ring-1 flex-shrink-0"
                           onClick={(e) => e.stopPropagation()}
                         />
+                        <div className={`truncate ${task.completed ? 'line-through' : ''}`}>{task.title}</div>
                         {task.accountability && accountabilityInfo && (
-                          <div className="flex items-center gap-1 mt-1">
-                            <accountabilityInfo.icon className="w-2 h-2" />
-                            <span className="text-xs opacity-75">{accountabilityInfo.title.split(' ')[0]}</span>
-                          </div>
+                          <accountabilityInfo.icon className="w-2 h-2 flex-shrink-0" />
                         )}
                       </div>
                     );
@@ -1012,7 +1200,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
                     
                     return (
                       <div key={task.id} className="text-xs text-gray-300 truncate flex items-center gap-1">
-                        <span className={`flex-1 ${task.completed ? 'line-through opacity-60' : ''}`}>{task.title}</span>
+                        <span className="flex-1">{task.title}</span>
                         {task.accountability && accountabilityInfo && (
                           <accountabilityInfo.icon className="w-2 h-2 opacity-75" />
                         )}
@@ -1056,7 +1244,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
                       <span className="capitalize">{task.category}</span>
                       {task.completed && task.completed_at && (
                         <span className="text-green-400">
-                          ✓ Completed {task.completed_at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          ✓ Completed at {task.completed_at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       )}
                     </div>
@@ -1091,7 +1279,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
                       checked={task.completed}
                       onChange={() => toggleTaskComplete(task.id)}
                       disabled={task.completed}
-                      className="w-5 h-5 rounded border-gray-600 text-yellow-400 focus:ring-yellow-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-5 h-5 rounded border-gray-600 text-yellow-400 focus:ring-yellow-400"
                     />
                   </div>
                 </div>
@@ -1233,11 +1421,23 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
         />
       )}
 
+      {/* New Task Modal */}
+      {showNewTaskModal && <NewTaskModal />}
+
       {/* Drag and Drop Instructions */}
       {draggedTask && (
         <div className="fixed bottom-20 md:bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-80 bg-yellow-400 text-black p-3 rounded-lg shadow-lg z-50">
           <p className="text-sm font-medium">
             📅 Dragging "{draggedTask.title}" - Drop on any time slot to reschedule!
+          </p>
+        </div>
+      )}
+
+      {/* Click to Create Instructions */}
+      {currentView === 'day' && (
+        <div className="fixed bottom-32 md:bottom-16 left-4 right-4 md:left-auto md:right-4 md:w-80 bg-blue-500/20 border border-blue-500/40 text-blue-400 p-3 rounded-lg shadow-lg z-40">
+          <p className="text-sm font-medium">
+            💡 Click on any empty time slot to create a new task!
           </p>
         </div>
       )}
