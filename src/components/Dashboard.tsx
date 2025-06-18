@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Calendar, Clock, Plus, ChevronLeft, ChevronRight, Flame, Zap, Target, Edit3, Save, X, Trash2, Users, Bot, UserCheck, Building, Copy, Star, AlertTriangle, CheckSquare, MoreHorizontal, Repeat, Settings } from 'lucide-react';
+import { Calendar, Clock, Plus, ChevronLeft, ChevronRight, Flame, Zap, Target, Edit3, Save, X, Trash2, Users, Bot, UserCheck, Building, CheckCircle } from 'lucide-react';
 import { Screen } from '../App';
 import { User, AppConfig } from '../types/user';
+import { markTaskComplete } from '../lib/supabase';
 
 interface Task {
   id: number;
@@ -11,14 +12,6 @@ interface Task {
   category: string;
   completed: boolean;
   date: Date;
-  recurring?: {
-    pattern: 'daily' | 'weekly' | 'monthly';
-    interval: number;
-    daysOfWeek?: number[];
-    endDate?: Date;
-  };
-  goalId?: string;
-  goalTitle?: string;
   accountability?: {
     type: 'ai' | 'partner' | 'team' | 'public';
     partner?: string;
@@ -26,31 +19,6 @@ interface Task {
     consequences?: string;
     rewards?: string;
   };
-  templateId?: string;
-}
-
-interface TaskTemplate {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  estimatedDuration: number;
-  defaultTime: string;
-  tags: string[];
-  isPublic: boolean;
-  usageCount: number;
-  createdBy: string;
-}
-
-interface ConflictResolution {
-  conflictingTasks: Task[];
-  suggestions: {
-    type: 'reschedule' | 'shorten' | 'split' | 'alternative_time';
-    description: string;
-    newTime?: string;
-    newDuration?: number;
-    reasoning: string;
-  }[];
 }
 
 interface DashboardProps {
@@ -66,64 +34,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
   const [editingTask, setEditingTask] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<Partial<Task>>({});
   const [showAccountabilityModal, setShowAccountabilityModal] = useState<number | null>(null);
-  const [showTaskCreationModal, setShowTaskCreationModal] = useState(false);
-  const [showTemplateModal, setShowTemplateModal] = useState(false);
-  const [showBulkEditModal, setShowBulkEditModal] = useState(false);
-  const [showConflictModal, setShowConflictModal] = useState<ConflictResolution | null>(null);
-  const [selectedTasks, setSelectedTasks] = useState<Set<number>>(new Set());
-  const [bulkEditMode, setBulkEditMode] = useState(false);
-
-  // Task Templates
-  const [taskTemplates, setTaskTemplates] = useState<TaskTemplate[]>([
-    {
-      id: 'template-1',
-      name: 'Daily Standup',
-      description: 'Team standup meeting with progress updates',
-      category: 'work',
-      estimatedDuration: 15,
-      defaultTime: '09:00',
-      tags: ['meeting', 'team', 'daily'],
-      isPublic: true,
-      usageCount: 45,
-      createdBy: 'system'
-    },
-    {
-      id: 'template-2',
-      name: 'Deep Work Session',
-      description: 'Focused work time without interruptions',
-      category: 'work',
-      estimatedDuration: 90,
-      defaultTime: '10:00',
-      tags: ['focus', 'productivity', 'deep-work'],
-      isPublic: true,
-      usageCount: 32,
-      createdBy: 'system'
-    },
-    {
-      id: 'template-3',
-      name: 'Workout Session',
-      description: 'Physical exercise and fitness routine',
-      category: 'fitness',
-      estimatedDuration: 60,
-      defaultTime: '18:00',
-      tags: ['fitness', 'health', 'routine'],
-      isPublic: true,
-      usageCount: 28,
-      createdBy: 'system'
-    },
-    {
-      id: 'template-4',
-      name: 'Learning Time',
-      description: 'Dedicated time for skill development and learning',
-      category: 'growth',
-      estimatedDuration: 45,
-      defaultTime: '20:00',
-      tags: ['learning', 'skill', 'development'],
-      isPublic: true,
-      usageCount: 19,
-      createdBy: 'system'
-    }
-  ]);
+  const [completingTask, setCompletingTask] = useState<number | null>(null);
+  const [showCompletionToast, setShowCompletionToast] = useState<{
+    show: boolean;
+    message: string;
+    xp?: number;
+  }>({ show: false, message: '' });
 
   const [tasks, setTasks] = useState<Task[]>([
     { 
@@ -134,7 +50,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
       category: 'wellness', 
       completed: true, 
       date: new Date(),
-      recurring: { pattern: 'daily', interval: 1 },
       accountability: {
         type: 'partner',
         partner: 'Sarah',
@@ -151,8 +66,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
       category: 'work', 
       completed: false, 
       date: new Date(),
-      goalId: 'goal-1',
-      goalTitle: 'Launch MVP',
       accountability: {
         type: 'team',
         checkInTime: '10:15',
@@ -170,7 +83,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
       category: 'fitness', 
       completed: false, 
       date: new Date(),
-      templateId: 'template-3',
       accountability: {
         type: 'ai',
         checkInTime: '19:30',
@@ -211,6 +123,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
     goalName: "Launch MVP",
     daysLeft: 3
   };
+
+  // Auto-hide completion toast
+  useEffect(() => {
+    if (showCompletionToast.show) {
+      const timer = setTimeout(() => {
+        setShowCompletionToast({ show: false, message: '' });
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [showCompletionToast.show]);
 
   const getCategoryColor = (category: string) => {
     const colors = {
@@ -267,190 +189,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
     }
   };
 
-  // Conflict Detection
-  const detectConflicts = (newTask: Partial<Task>, excludeTaskId?: number): ConflictResolution | null => {
-    if (!newTask.time || !newTask.duration || !newTask.date) return null;
-
-    const newStartTime = new Date(`${newTask.date.toDateString()} ${newTask.time}`);
-    const newEndTime = new Date(newStartTime.getTime() + newTask.duration * 60000);
-
-    const conflictingTasks = tasks.filter(task => {
-      if (excludeTaskId && task.id === excludeTaskId) return false;
-      if (task.date.toDateString() !== newTask.date.toDateString()) return false;
-
-      const taskStartTime = new Date(`${task.date.toDateString()} ${task.time}`);
-      const taskEndTime = new Date(taskStartTime.getTime() + task.duration * 60000);
-
-      return (newStartTime < taskEndTime && newEndTime > taskStartTime);
-    });
-
-    if (conflictingTasks.length === 0) return null;
-
-    // Generate resolution suggestions
-    const suggestions = [];
-
-    // Suggestion 1: Reschedule to next available slot
-    const nextAvailableTime = findNextAvailableSlot(newTask.date, newTask.duration);
-    if (nextAvailableTime) {
-      suggestions.push({
-        type: 'reschedule' as const,
-        description: `Reschedule to ${nextAvailableTime}`,
-        newTime: nextAvailableTime,
-        reasoning: 'Next available time slot that fits your task duration'
-      });
-    }
-
-    // Suggestion 2: Shorten conflicting tasks
-    if (conflictingTasks.length === 1) {
-      const conflictTask = conflictingTasks[0];
-      const possibleReduction = Math.min(15, conflictTask.duration - 15);
-      if (possibleReduction > 0) {
-        suggestions.push({
-          type: 'shorten' as const,
-          description: `Shorten "${conflictTask.title}" by ${possibleReduction} minutes`,
-          newDuration: conflictTask.duration - possibleReduction,
-          reasoning: 'Reduce duration of conflicting task to make room'
-        });
-      }
-    }
-
-    // Suggestion 3: Alternative time based on category
-    const categoryOptimalTimes = {
-      work: ['09:00', '10:00', '14:00', '15:00'],
-      fitness: ['07:00', '18:00', '19:00'],
-      wellness: ['07:00', '12:00', '21:00'],
-      growth: ['20:00', '21:00', '22:00']
-    };
-
-    const optimalTimes = categoryOptimalTimes[newTask.category as keyof typeof categoryOptimalTimes] || [];
-    for (const time of optimalTimes) {
-      if (time !== newTask.time && !hasConflictAtTime(newTask.date, time, newTask.duration)) {
-        suggestions.push({
-          type: 'alternative_time' as const,
-          description: `Try ${time} (optimal for ${newTask.category})`,
-          newTime: time,
-          reasoning: `${time} is typically optimal for ${newTask.category} activities`
-        });
-        break;
-      }
-    }
-
-    return { conflictingTasks, suggestions };
-  };
-
-  const findNextAvailableSlot = (date: Date, duration: number): string | null => {
-    const dayTasks = tasks.filter(task => task.date.toDateString() === date.toDateString());
-    
-    for (const slot of timeSlots) {
-      const slotStart = new Date(`${date.toDateString()} ${slot.timeString}`);
-      const slotEnd = new Date(slotStart.getTime() + duration * 60000);
-      
-      const hasConflict = dayTasks.some(task => {
-        const taskStart = new Date(`${task.date.toDateString()} ${task.time}`);
-        const taskEnd = new Date(taskStart.getTime() + task.duration * 60000);
-        return (slotStart < taskEnd && slotEnd > taskStart);
-      });
-      
-      if (!hasConflict && slotEnd.getHours() <= 23) {
-        return slot.timeString;
-      }
-    }
-    
-    return null;
-  };
-
-  const hasConflictAtTime = (date: Date, time: string, duration: number): boolean => {
-    const newStartTime = new Date(`${date.toDateString()} ${time}`);
-    const newEndTime = new Date(newStartTime.getTime() + duration * 60000);
-
-    return tasks.some(task => {
-      if (task.date.toDateString() !== date.toDateString()) return false;
-      const taskStartTime = new Date(`${task.date.toDateString()} ${task.time}`);
-      const taskEndTime = new Date(taskStartTime.getTime() + task.duration * 60000);
-      return (newStartTime < taskEndTime && newEndTime > taskStartTime);
-    });
-  };
-
-  // Bulk Operations
-  const handleBulkEdit = (updates: Partial<Task>) => {
-    setTasks(prevTasks =>
-      prevTasks.map(task =>
-        selectedTasks.has(task.id) ? { ...task, ...updates } : task
-      )
-    );
-    setSelectedTasks(new Set());
-    setBulkEditMode(false);
-    setShowBulkEditModal(false);
-  };
-
-  const handleBulkDelete = () => {
-    setTasks(prevTasks => prevTasks.filter(task => !selectedTasks.has(task.id)));
-    setSelectedTasks(new Set());
-    setBulkEditMode(false);
-  };
-
-  const handleBulkReschedule = (days: number) => {
-    setTasks(prevTasks =>
-      prevTasks.map(task => {
-        if (selectedTasks.has(task.id)) {
-          const newDate = new Date(task.date);
-          newDate.setDate(newDate.getDate() + days);
-          return { ...task, date: newDate };
-        }
-        return task;
-      })
-    );
-    setSelectedTasks(new Set());
-    setBulkEditMode(false);
-    setShowBulkEditModal(false);
-  };
-
-  // Template Operations
-  const createTaskFromTemplate = (template: TaskTemplate, customizations?: Partial<Task>) => {
-    const newTask: Task = {
-      id: Date.now(),
-      title: template.name,
-      time: customizations?.time || template.defaultTime,
-      duration: customizations?.duration || template.estimatedDuration,
-      category: template.category,
-      completed: false,
-      date: customizations?.date || new Date(),
-      templateId: template.id,
-      ...customizations
-    };
-
-    // Check for conflicts
-    const conflicts = detectConflicts(newTask);
-    if (conflicts) {
-      setShowConflictModal(conflicts);
-      return;
-    }
-
-    setTasks(prev => [...prev, newTask]);
-    
-    // Update template usage count
-    setTaskTemplates(prev =>
-      prev.map(t => t.id === template.id ? { ...t, usageCount: t.usageCount + 1 } : t)
-    );
-  };
-
-  const saveAsTemplate = (task: Task) => {
-    const newTemplate: TaskTemplate = {
-      id: `template-${Date.now()}`,
-      name: task.title,
-      description: `Template created from "${task.title}"`,
-      category: task.category,
-      estimatedDuration: task.duration,
-      defaultTime: task.time,
-      tags: [task.category],
-      isPublic: false,
-      usageCount: 0,
-      createdBy: user.id
-    };
-
-    setTaskTemplates(prev => [...prev, newTemplate]);
-  };
-
   // Drag and Drop Functions
   const handleDragStart = (e: React.DragEvent, task: Task) => {
     setDraggedTask(task);
@@ -466,23 +204,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
     e.preventDefault();
     if (!draggedTask) return;
 
-    const updatedTask = {
-      ...draggedTask,
-      time: newTime,
-      date: newDate || draggedTask.date
-    };
-
-    // Check for conflicts
-    const conflicts = detectConflicts(updatedTask, draggedTask.id);
-    if (conflicts) {
-      setShowConflictModal(conflicts);
-      setDraggedTask(null);
-      return;
-    }
-
     setTasks(prevTasks => 
       prevTasks.map(task => 
-        task.id === draggedTask.id ? updatedTask : task
+        task.id === draggedTask.id 
+          ? { 
+              ...task, 
+              time: newTime,
+              date: newDate || task.date
+            }
+          : task
       )
     );
     setDraggedTask(null);
@@ -522,14 +252,77 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
     setTasks(prevTasks => prevTasks.filter(task => task.id !== taskId));
   };
 
-  const toggleTaskComplete = (taskId: number) => {
-    setTasks(prevTasks =>
-      prevTasks.map(task =>
-        task.id === taskId
-          ? { ...task, completed: !task.completed }
-          : task
-      )
-    );
+  const toggleTaskComplete = async (taskId: number) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    // If task is already completed, just toggle it locally
+    if (task.completed) {
+      setTasks(prevTasks =>
+        prevTasks.map(t =>
+          t.id === taskId
+            ? { ...t, completed: false }
+            : t
+        )
+      );
+      return;
+    }
+
+    // Mark as completing to show loading state
+    setCompletingTask(taskId);
+
+    try {
+      // Call the mark_task_complete function
+      const { data, error } = await markTaskComplete(
+        taskId.toString(), 
+        user.id,
+        `Completed via dashboard on ${new Date().toLocaleDateString()}`
+      );
+
+      if (error) {
+        console.error('Error marking task complete:', error);
+        setShowCompletionToast({
+          show: true,
+          message: 'Failed to mark task complete. Please try again.',
+        });
+        return;
+      }
+
+      // Update the task locally
+      setTasks(prevTasks =>
+        prevTasks.map(t =>
+          t.id === taskId
+            ? { ...t, completed: true }
+            : t
+        )
+      );
+
+      // Show success toast with XP gained
+      setShowCompletionToast({
+        show: true,
+        message: `🎉 Task completed! ${data?.xp_gained ? `+${data.xp_gained} XP` : ''}`,
+        xp: data?.xp_gained
+      });
+
+      // If there's accountability, show additional message
+      if (task.accountability) {
+        setTimeout(() => {
+          setShowCompletionToast({
+            show: true,
+            message: `✅ Accountability logged for ${getAccountabilityTypeInfo(task.accountability!.type).title}`,
+          });
+        }, 2000);
+      }
+
+    } catch (error) {
+      console.error('Unexpected error marking task complete:', error);
+      setShowCompletionToast({
+        show: true,
+        message: 'An unexpected error occurred. Please try again.',
+      });
+    } finally {
+      setCompletingTask(null);
+    }
   };
 
   const handleCheckIn = (taskId: number) => {
@@ -593,6 +386,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
   const timeToMinutes = (timeString: string) => {
     const [hours, minutes] = timeString.split(':').map(Number);
     return (hours - 6) * 60 + minutes; // Subtract 6 because we start at 6 AM
+  };
+
+  // Convert position back to time
+  const positionToTime = (position: number) => {
+    const totalMinutes = Math.round((position / 16) * 15); // 16px per 15-minute slot
+    const hours = Math.floor(totalMinutes / 60) + 6; // Add 6 because we start at 6 AM
+    const minutes = totalMinutes % 60;
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
   };
 
   // Ultra micro pie chart component
@@ -707,6 +508,32 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
                     Edit Accountability
                   </button>
                 </div>
+
+                {/* Accountability type specific info */}
+                <div className={`rounded-lg p-3 border ${typeInfo.color}`}>
+                  <h4 className="font-medium mb-1 flex items-center gap-1">
+                    💡 About {typeInfo.title}:
+                  </h4>
+                  <p className="text-gray-300 text-sm">{typeInfo.description}</p>
+                  
+                  {task.accountability.type === 'ai' && (
+                    <p className="text-gray-400 text-xs mt-2">
+                      Crushion uses advanced AI to provide personalized motivation and track your progress patterns.
+                    </p>
+                  )}
+                  
+                  {task.accountability.type === 'partner' && (
+                    <p className="text-gray-400 text-xs mt-2">
+                      Studies show accountability partners increase success rates by up to 95%!
+                    </p>
+                  )}
+                  
+                  {task.accountability.type === 'team' && (
+                    <p className="text-gray-400 text-xs mt-2">
+                      Team accountability creates shared responsibility and collective motivation.
+                    </p>
+                  )}
+                </div>
               </>
             ) : (
               <div className="text-center py-6">
@@ -715,6 +542,42 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
                 <p className="text-gray-400 text-sm mb-4">
                   Add accountability to increase your chances of completing this task by up to 95%!
                 </p>
+                
+                {/* Accountability type options */}
+                <div className="grid grid-cols-2 gap-2 mb-4">
+                  <button className="bg-gray-800 hover:bg-gray-700 p-3 rounded-lg text-left transition-colors">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Bot className="w-4 h-4 text-blue-400" />
+                      <span className="text-white text-sm font-medium">AI</span>
+                    </div>
+                    <p className="text-xs text-gray-400">Smart tracking</p>
+                  </button>
+                  
+                  <button className="bg-gray-800 hover:bg-gray-700 p-3 rounded-lg text-left transition-colors">
+                    <div className="flex items-center gap-2 mb-1">
+                      <UserCheck className="w-4 h-4 text-green-400" />
+                      <span className="text-white text-sm font-medium">Partner</span>
+                    </div>
+                    <p className="text-xs text-gray-400">Personal support</p>
+                  </button>
+                  
+                  <button className="bg-gray-800 hover:bg-gray-700 p-3 rounded-lg text-left transition-colors">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Building className="w-4 h-4 text-purple-400" />
+                      <span className="text-white text-sm font-medium">Team</span>
+                    </div>
+                    <p className="text-xs text-gray-400">Group commitment</p>
+                  </button>
+                  
+                  <button className="bg-gray-800 hover:bg-gray-700 p-3 rounded-lg text-left transition-colors">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Users className="w-4 h-4 text-yellow-400" />
+                      <span className="text-white text-sm font-medium">Public</span>
+                    </div>
+                    <p className="text-xs text-gray-400">Social pressure</p>
+                  </button>
+                </div>
+                
                 <button className="bg-yellow-400 text-black py-2 px-4 rounded-lg font-medium hover:bg-yellow-300 transition-colors">
                   Set Up Accountability
                 </button>
@@ -725,224 +588,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
       </div>
     );
   };
-
-  // Template Modal Component
-  const TemplateModal = () => (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 rounded-xl border border-gray-800 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
-        <div className="p-4 border-b border-gray-800">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-              <Star className="w-5 h-5 text-yellow-400" />
-              Task Templates
-            </h3>
-            <button
-              onClick={() => setShowTemplateModal(false)}
-              className="p-1 hover:bg-gray-800 rounded"
-            >
-              <X className="w-5 h-5 text-gray-400" />
-            </button>
-          </div>
-        </div>
-        
-        <div className="p-4">
-          <div className="grid gap-3">
-            {taskTemplates.map(template => (
-              <div key={template.id} className="bg-gray-800 rounded-lg p-4 hover:bg-gray-750 transition-colors">
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex-1">
-                    <h4 className="text-white font-medium">{template.name}</h4>
-                    <p className="text-gray-400 text-sm">{template.description}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs bg-gray-700 text-gray-300 px-2 py-1 rounded">
-                      {template.usageCount} uses
-                    </span>
-                    {template.isPublic && (
-                      <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-1 rounded">
-                        Public
-                      </span>
-                    )}
-                  </div>
-                </div>
-                
-                <div className="flex items-center gap-4 text-sm text-gray-400 mb-3">
-                  <span className="capitalize">{template.category}</span>
-                  <span>{template.estimatedDuration} min</span>
-                  <span>{template.defaultTime}</span>
-                </div>
-                
-                <div className="flex flex-wrap gap-1 mb-3">
-                  {template.tags.map(tag => (
-                    <span key={tag} className="text-xs bg-gray-700 text-gray-300 px-2 py-1 rounded">
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-                
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => {
-                      createTaskFromTemplate(template);
-                      setShowTemplateModal(false);
-                    }}
-                    className="flex-1 bg-yellow-400 text-black py-2 px-4 rounded-lg font-medium hover:bg-yellow-300 transition-colors"
-                  >
-                    Use Template
-                  </button>
-                  <button
-                    onClick={() => {
-                      createTaskFromTemplate(template, { date: new Date(Date.now() + 86400000) });
-                      setShowTemplateModal(false);
-                    }}
-                    className="bg-gray-700 text-white py-2 px-4 rounded-lg font-medium hover:bg-gray-600 transition-colors"
-                  >
-                    Tomorrow
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  // Bulk Edit Modal Component
-  const BulkEditModal = () => (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 rounded-xl border border-gray-800 max-w-md w-full">
-        <div className="p-4 border-b border-gray-800">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-              <CheckSquare className="w-5 h-5 text-yellow-400" />
-              Bulk Edit ({selectedTasks.size} tasks)
-            </h3>
-            <button
-              onClick={() => setShowBulkEditModal(false)}
-              className="p-1 hover:bg-gray-800 rounded"
-            >
-              <X className="w-5 h-5 text-gray-400" />
-            </button>
-          </div>
-        </div>
-        
-        <div className="p-4 space-y-4">
-          <div>
-            <h4 className="text-white font-medium mb-3">Bulk Actions</h4>
-            <div className="space-y-2">
-              <button
-                onClick={() => handleBulkReschedule(1)}
-                className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Move to Tomorrow
-              </button>
-              <button
-                onClick={() => handleBulkReschedule(7)}
-                className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Move to Next Week
-              </button>
-              <button
-                onClick={() => handleBulkEdit({ category: 'work' })}
-                className="w-full bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors"
-              >
-                Change Category to Work
-              </button>
-              <button
-                onClick={() => handleBulkEdit({ completed: true })}
-                className="w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors"
-              >
-                Mark All Complete
-              </button>
-              <button
-                onClick={handleBulkDelete}
-                className="w-full bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition-colors"
-              >
-                Delete All Selected
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  // Conflict Resolution Modal Component
-  const ConflictModal = ({ conflicts }: { conflicts: ConflictResolution }) => (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 rounded-xl border border-gray-800 max-w-md w-full">
-        <div className="p-4 border-b border-gray-800">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-yellow-400" />
-              Schedule Conflict Detected
-            </h3>
-            <button
-              onClick={() => setShowConflictModal(null)}
-              className="p-1 hover:bg-gray-800 rounded"
-            >
-              <X className="w-5 h-5 text-gray-400" />
-            </button>
-          </div>
-        </div>
-        
-        <div className="p-4 space-y-4">
-          <div>
-            <h4 className="text-white font-medium mb-2">Conflicting Tasks:</h4>
-            <div className="space-y-2">
-              {conflicts.conflictingTasks.map(task => (
-                <div key={task.id} className="bg-red-500/10 border border-red-500/20 rounded-lg p-2">
-                  <p className="text-white text-sm font-medium">{task.title}</p>
-                  <p className="text-gray-400 text-xs">{task.time} - {task.duration} min</p>
-                </div>
-              ))}
-            </div>
-          </div>
-          
-          <div>
-            <h4 className="text-white font-medium mb-2">Suggested Solutions:</h4>
-            <div className="space-y-2">
-              {conflicts.suggestions.map((suggestion, index) => (
-                <button
-                  key={index}
-                  onClick={() => {
-                    // Apply the suggestion
-                    if (suggestion.type === 'reschedule' && suggestion.newTime) {
-                      // Handle reschedule logic
-                    }
-                    setShowConflictModal(null);
-                  }}
-                  className="w-full bg-gray-800 hover:bg-gray-700 text-left p-3 rounded-lg transition-colors"
-                >
-                  <p className="text-white text-sm font-medium">{suggestion.description}</p>
-                  <p className="text-gray-400 text-xs">{suggestion.reasoning}</p>
-                </button>
-              ))}
-            </div>
-          </div>
-          
-          <div className="flex gap-2">
-            <button
-              onClick={() => setShowConflictModal(null)}
-              className="flex-1 bg-gray-700 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={() => {
-                // Force create anyway
-                setShowConflictModal(null);
-              }}
-              className="flex-1 bg-yellow-400 text-black py-2 px-4 rounded-lg hover:bg-yellow-300 transition-colors"
-            >
-              Create Anyway
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 
   const renderDayView = () => (
     <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
@@ -996,6 +641,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
                 const heightInPixels = (task.duration / 15) * 16; // 16px per 15-minute slot
                 const topPosition = (startMinutes / 15) * 16; // 16px per 15-minute slot
                 const isEditing = editingTask === task.id;
+                const isCompleting = completingTask === task.id;
                 const accountabilityInfo = task.accountability ? getAccountabilityTypeInfo(task.accountability.type) : null;
 
                 if (isEditing) {
@@ -1071,53 +717,47 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
                       task.completed ? 'opacity-60' : ''
                     } ${getCategoryColor(task.category)} ${
                       draggedTask?.id === task.id ? 'opacity-50 scale-95' : ''
-                    } ${
-                      bulkEditMode && selectedTasks.has(task.id) ? 'ring-2 ring-yellow-400' : ''
                     }`}
                     style={{ 
                       top: `${topPosition}px`,
                       height: `${Math.max(heightInPixels, 32)}px`,
                       minHeight: '32px'
                     }}
-                    onClick={() => {
-                      if (bulkEditMode) {
-                        const newSelected = new Set(selectedTasks);
-                        if (newSelected.has(task.id)) {
-                          newSelected.delete(task.id);
-                        } else {
-                          newSelected.add(task.id);
-                        }
-                        setSelectedTasks(newSelected);
-                      }
-                    }}
                   >
                     <div className="p-1 h-full flex flex-col justify-between relative">
                       <div className="flex items-center gap-1">
-                        {bulkEditMode && (
-                          <input
-                            type="checkbox"
-                            checked={selectedTasks.has(task.id)}
-                            onChange={() => {}}
-                            className="w-3 h-3 rounded"
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        )}
                         <div className={`font-medium leading-tight flex-1 ${task.completed ? 'line-through' : ''}`}>
                           {task.title}
                         </div>
-                        {task.recurring && <Repeat className="w-3 h-3 opacity-75" />}
-                        {task.goalId && <Target className="w-3 h-3 opacity-75" />}
-                        {task.templateId && <Star className="w-3 h-3 opacity-75" />}
+                        
+                        {/* Completion checkbox */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleTaskComplete(task.id);
+                          }}
+                          disabled={isCompleting}
+                          className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${
+                            task.completed 
+                              ? 'bg-green-500 border-green-500' 
+                              : 'border-white/50 hover:border-white'
+                          } ${isCompleting ? 'animate-pulse' : ''}`}
+                        >
+                          {isCompleting ? (
+                            <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                          ) : task.completed ? (
+                            <CheckCircle className="w-3 h-3 text-white" />
+                          ) : null}
+                        </button>
                       </div>
                       
                       {heightInPixels > 24 && (
                         <div className="text-xs opacity-75 mt-0.5">
                           {task.time} • {task.duration}min
-                          {task.goalTitle && <div className="text-xs opacity-60">🔗 {task.goalTitle}</div>}
                         </div>
                       )}
 
-                      {/* Accountability Button */}
+                      {/* Accountability Button - Always visible when accountability is set */}
                       {task.accountability && accountabilityInfo && (
                         <button
                           onClick={(e) => {
@@ -1132,18 +772,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
                         </button>
                       )}
                       
-                      {/* Task controls */}
-                      <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            saveAsTemplate(task);
-                          }}
-                          className="w-4 h-4 bg-black/50 hover:bg-black/70 rounded flex items-center justify-center"
-                          title="Save as template"
-                        >
-                          <Star className="w-2 h-2" />
-                        </button>
+                      {/* Task controls - only visible on hover */}
+                      <div className="absolute top-1 right-6 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1174,7 +804,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
               const now = new Date();
               if (now.toDateString() === currentDate.toDateString()) {
                 const currentMinutes = (now.getHours() - 6) * 60 + now.getMinutes();
-                if (currentMinutes >= 0 && currentMinutes <= 18 * 60) {
+                if (currentMinutes >= 0 && currentMinutes <= 18 * 60) { // 6 AM to 12 AM
                   const currentPosition = (currentMinutes / 15) * 16;
                   return (
                     <div
@@ -1243,6 +873,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
                     )
                     .map(task => {
                       const accountabilityInfo = task.accountability ? getAccountabilityTypeInfo(task.accountability.type) : null;
+                      const isCompleting = completingTask === task.id;
                       
                       return (
                         <div
@@ -1251,37 +882,33 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
                           onDragStart={(e) => handleDragStart(e, task)}
                           className={`absolute inset-x-2 top-1 p-2 rounded-lg text-xs text-white cursor-move transition-all hover:scale-105 group ${
                             task.completed ? 'opacity-50' : ''
-                          } ${getCategoryColor(task.category)} ${
-                            bulkEditMode && selectedTasks.has(task.id) ? 'ring-2 ring-yellow-400' : ''
-                          }`}
+                          } ${getCategoryColor(task.category)}`}
                           style={{ height: `${Math.min(task.duration, 50)}px` }}
-                          onClick={() => {
-                            if (bulkEditMode) {
-                              const newSelected = new Set(selectedTasks);
-                              if (newSelected.has(task.id)) {
-                                newSelected.delete(task.id);
-                              } else {
-                                newSelected.add(task.id);
-                              }
-                              setSelectedTasks(newSelected);
-                            }
-                          }}
                         >
                           <div className="flex items-center gap-1">
-                            {bulkEditMode && (
-                              <input
-                                type="checkbox"
-                                checked={selectedTasks.has(task.id)}
-                                onChange={() => {}}
-                                className="w-2 h-2 rounded"
-                                onClick={(e) => e.stopPropagation()}
-                              />
-                            )}
                             <div className={`font-medium flex-1 ${task.completed ? 'line-through' : ''}`}>
                               {task.title}
                             </div>
-                            {task.recurring && <Repeat className="w-2 h-2 opacity-75" />}
-                            {task.goalId && <Target className="w-2 h-2 opacity-75" />}
+                            
+                            {/* Completion checkbox for week view */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleTaskComplete(task.id);
+                              }}
+                              disabled={isCompleting}
+                              className={`w-3 h-3 rounded border flex items-center justify-center transition-all ${
+                                task.completed 
+                                  ? 'bg-green-500 border-green-500' 
+                                  : 'border-white/50 hover:border-white'
+                              } ${isCompleting ? 'animate-pulse' : ''}`}
+                            >
+                              {isCompleting ? (
+                                <div className="w-1 h-1 bg-white rounded-full animate-pulse" />
+                              ) : task.completed ? (
+                                <CheckCircle className="w-2 h-2 text-white" />
+                              ) : null}
+                            </button>
                           </div>
                           <div className="text-xs opacity-75">{task.duration}min</div>
                           
@@ -1369,41 +996,37 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
                 <div className="space-y-1">
                   {dayTasks.slice(0, 2).map(task => {
                     const accountabilityInfo = task.accountability ? getAccountabilityTypeInfo(task.accountability.type) : null;
+                    const isCompleting = completingTask === task.id;
                     
                     return (
                       <div
                         key={task.id}
                         draggable
                         onDragStart={(e) => handleDragStart(e, task)}
-                        className={`text-xs p-1 rounded cursor-move hover:scale-105 transition-transform ${getCategoryColor(task.category)} text-white ${
-                          bulkEditMode && selectedTasks.has(task.id) ? 'ring-1 ring-yellow-400' : ''
-                        }`}
-                        onClick={() => {
-                          if (bulkEditMode) {
-                            const newSelected = new Set(selectedTasks);
-                            if (newSelected.has(task.id)) {
-                              newSelected.delete(task.id);
-                            } else {
-                              newSelected.add(task.id);
-                            }
-                            setSelectedTasks(newSelected);
-                          }
-                        }}
+                        className={`text-xs p-1 rounded cursor-move hover:scale-105 transition-transform ${getCategoryColor(task.category)} text-white flex items-center gap-1`}
                       >
-                        <div className="truncate flex items-center gap-1">
-                          {bulkEditMode && (
-                            <input
-                              type="checkbox"
-                              checked={selectedTasks.has(task.id)}
-                              onChange={() => {}}
-                              className="w-2 h-2 rounded"
-                              onClick={(e) => e.stopPropagation()}
-                            />
-                          )}
-                          <span className="flex-1 truncate">{task.title}</span>
-                          {task.recurring && <Repeat className="w-2 h-2 opacity-75" />}
-                          {task.goalId && <Target className="w-2 h-2 opacity-75" />}
-                        </div>
+                        <div className={`truncate flex-1 ${task.completed ? 'line-through' : ''}`}>{task.title}</div>
+                        
+                        {/* Completion checkbox for month view */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleTaskComplete(task.id);
+                          }}
+                          disabled={isCompleting}
+                          className={`w-3 h-3 rounded border flex items-center justify-center transition-all ${
+                            task.completed 
+                              ? 'bg-green-500 border-green-500' 
+                              : 'border-white/50 hover:border-white'
+                          } ${isCompleting ? 'animate-pulse' : ''}`}
+                        >
+                          {isCompleting ? (
+                            <div className="w-1 h-1 bg-white rounded-full animate-pulse" />
+                          ) : task.completed ? (
+                            <CheckCircle className="w-2 h-2 text-white" />
+                          ) : null}
+                        </button>
+                        
                         {task.accountability && accountabilityInfo && (
                           <div className="flex items-center gap-1 mt-1">
                             <accountabilityInfo.icon className="w-2 h-2" />
@@ -1458,8 +1081,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
                     return (
                       <div key={task.id} className="text-xs text-gray-300 truncate flex items-center gap-1">
                         <span className="flex-1">{task.title}</span>
-                        {task.recurring && <Repeat className="w-2 h-2 opacity-75" />}
-                        {task.goalId && <Target className="w-2 h-2 opacity-75" />}
                         {task.accountability && accountabilityInfo && (
                           <accountabilityInfo.icon className="w-2 h-2 opacity-75" />
                         )}
@@ -1485,60 +1106,29 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
           .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
           .map(task => {
             const accountabilityInfo = task.accountability ? getAccountabilityTypeInfo(task.accountability.type) : null;
+            const isCompleting = completingTask === task.id;
             
             return (
-              <div 
-                key={task.id} 
-                className={`p-4 hover:bg-gray-800/50 transition-colors group ${
-                  bulkEditMode && selectedTasks.has(task.id) ? 'bg-yellow-400/10 border-l-4 border-yellow-400' : ''
-                }`}
-                onClick={() => {
-                  if (bulkEditMode) {
-                    const newSelected = new Set(selectedTasks);
-                    if (newSelected.has(task.id)) {
-                      newSelected.delete(task.id);
-                    } else {
-                      newSelected.add(task.id);
-                    }
-                    setSelectedTasks(newSelected);
-                  }
-                }}
-              >
+              <div key={task.id} className="p-4 hover:bg-gray-800/50 transition-colors group">
                 <div className="flex items-center gap-4">
-                  {bulkEditMode && (
-                    <input
-                      type="checkbox"
-                      checked={selectedTasks.has(task.id)}
-                      onChange={() => {}}
-                      className="w-4 h-4 rounded"
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  )}
                   <div className={`w-3 h-3 rounded-full ${getCategoryColor(task.category)}`}></div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <h4 className={`font-medium text-white ${task.completed ? 'line-through opacity-50' : ''}`}>
                         {task.title}
                       </h4>
-                      {task.recurring && <Repeat className="w-4 h-4 text-gray-400" />}
-                      {task.goalId && <Target className="w-4 h-4 text-gray-400" />}
-                      {task.templateId && <Star className="w-4 h-4 text-gray-400" />}
                     </div>
                     <div className="flex items-center gap-4 text-sm text-gray-400 mt-1">
                       <span>{task.date.toLocaleDateString()}</span>
                       <span>{task.time}</span>
                       <span>{task.duration} min</span>
                       <span className="capitalize">{task.category}</span>
-                      {task.goalTitle && <span className="text-blue-400">🔗 {task.goalTitle}</span>}
                     </div>
                     
                     {/* Accountability Button in Schedule View */}
                     {task.accountability && accountabilityInfo && (
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowAccountabilityModal(task.id);
-                        }}
+                        onClick={() => setShowAccountabilityModal(task.id)}
                         className={`mt-2 px-3 py-1 rounded text-xs font-medium text-white transition-all ${accountabilityInfo.buttonColor} flex items-center gap-1`}
                       >
                         <accountabilityInfo.icon className="w-3 h-3" />
@@ -1549,42 +1139,32 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
                   
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        saveAsTemplate(task);
-                      }}
-                      className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-700 rounded transition-all"
-                      title="Save as template"
-                    >
-                      <Star className="w-4 h-4 text-gray-400" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        startEditing(task);
-                      }}
+                      onClick={() => startEditing(task)}
                       className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-700 rounded transition-all"
                     >
                       <Edit3 className="w-4 h-4 text-gray-400" />
                     </button>
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteTask(task.id);
-                      }}
+                      onClick={() => deleteTask(task.id)}
                       className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-700 rounded transition-all"
                     >
                       <Trash2 className="w-4 h-4 text-red-400" />
                     </button>
-                    <input
-                      type="checkbox"
-                      checked={task.completed}
-                      onChange={(e) => {
-                        e.stopPropagation();
-                        toggleTaskComplete(task.id);
-                      }}
-                      className="w-5 h-5 rounded border-gray-600 text-yellow-400 focus:ring-yellow-400"
-                    />
+                    <button
+                      onClick={() => toggleTaskComplete(task.id)}
+                      disabled={isCompleting}
+                      className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                        task.completed 
+                          ? 'bg-green-500 border-green-500' 
+                          : 'border-gray-600 hover:border-yellow-400'
+                      } ${isCompleting ? 'animate-pulse' : ''}`}
+                    >
+                      {isCompleting ? (
+                        <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                      ) : task.completed ? (
+                        <CheckCircle className="w-3 h-3 text-white" />
+                      ) : null}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1623,71 +1203,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
           <p className="text-gray-400">Ready to make today legendary?</p>
         </div>
         
-        <div className="flex gap-2">
-          <button
-            onClick={() => setShowTemplateModal(true)}
-            className="bg-purple-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-purple-700 transition-colors flex items-center gap-2"
-          >
-            <Star className="w-4 h-4" />
-            Templates
-          </button>
-          <button
-            onClick={() => setBulkEditMode(!bulkEditMode)}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
-              bulkEditMode 
-                ? 'bg-yellow-400 text-black hover:bg-yellow-300' 
-                : 'bg-gray-700 text-white hover:bg-gray-600'
-            }`}
-          >
-            <CheckSquare className="w-4 h-4" />
-            {bulkEditMode ? 'Exit Bulk' : 'Bulk Edit'}
-          </button>
-          <button
-            onClick={() => onNavigate('goal-wizard')}
-            className="bg-yellow-400 text-black px-4 py-2 rounded-lg font-semibold hover:bg-yellow-300 transition-colors flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            Add Goal
-          </button>
-        </div>
+        <button
+          onClick={() => onNavigate('goal-wizard')}
+          className="bg-yellow-400 text-black px-4 md:px-6 py-2 md:py-3 rounded-xl font-semibold hover:bg-yellow-300 transition-colors flex items-center gap-2 w-fit"
+        >
+          <Plus className="w-4 md:w-5 h-4 md:h-5" />
+          <span className="text-sm md:text-base">Add Goal</span>
+        </button>
       </div>
-
-      {/* Bulk Edit Controls */}
-      {bulkEditMode && (
-        <div className="bg-yellow-400/10 border border-yellow-400/20 rounded-xl p-4 mb-6">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <span className="text-yellow-400 font-medium">
-                {selectedTasks.size} task{selectedTasks.size !== 1 ? 's' : ''} selected
-              </span>
-              <button
-                onClick={() => {
-                  const allTaskIds = new Set(tasks.map(t => t.id));
-                  setSelectedTasks(allTaskIds);
-                }}
-                className="text-yellow-400 hover:text-yellow-300 text-sm underline"
-              >
-                Select All
-              </button>
-              <button
-                onClick={() => setSelectedTasks(new Set())}
-                className="text-yellow-400 hover:text-yellow-300 text-sm underline"
-              >
-                Clear Selection
-              </button>
-            </div>
-            
-            {selectedTasks.size > 0 && (
-              <button
-                onClick={() => setShowBulkEditModal(true)}
-                className="bg-yellow-400 text-black px-4 py-2 rounded-lg font-medium hover:bg-yellow-300 transition-colors"
-              >
-                Bulk Actions
-              </button>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Ultra Micro Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4 mb-6">
@@ -1775,31 +1298,31 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
       {/* Dynamic Calendar View */}
       {renderCalendarView()}
 
-      {/* Modals */}
+      {/* Accountability Modal */}
       {showAccountabilityModal && (
         <AccountabilityModal 
           task={tasks.find(t => t.id === showAccountabilityModal)!} 
         />
       )}
 
-      {showTemplateModal && <TemplateModal />}
-      {showBulkEditModal && <BulkEditModal />}
-      {showConflictModal && <ConflictModal conflicts={showConflictModal} />}
+      {/* Completion Toast */}
+      {showCompletionToast.show && (
+        <div className="fixed top-4 right-4 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2 animate-in slide-in-from-right">
+          <CheckCircle className="w-5 h-5" />
+          <span className="font-medium">{showCompletionToast.message}</span>
+          {showCompletionToast.xp && (
+            <span className="bg-yellow-400 text-black px-2 py-1 rounded text-sm font-bold">
+              +{showCompletionToast.xp} XP
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Drag and Drop Instructions */}
       {draggedTask && (
         <div className="fixed bottom-20 md:bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-80 bg-yellow-400 text-black p-3 rounded-lg shadow-lg z-50">
           <p className="text-sm font-medium">
             📅 Dragging "{draggedTask.title}" - Drop on any time slot to reschedule!
-          </p>
-        </div>
-      )}
-
-      {/* Bulk Edit Instructions */}
-      {bulkEditMode && selectedTasks.size === 0 && (
-        <div className="fixed bottom-20 md:bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-80 bg-blue-400 text-black p-3 rounded-lg shadow-lg z-50">
-          <p className="text-sm font-medium">
-            ✅ Bulk Edit Mode: Click tasks to select them, then use bulk actions!
           </p>
         </div>
       )}

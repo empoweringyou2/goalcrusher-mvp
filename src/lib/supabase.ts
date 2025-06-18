@@ -31,6 +31,55 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export { supabase }
 
+// Task completion helper function
+export const markTaskComplete = async (taskId: string, userId: string, reflection?: string) => {
+  if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+    console.log('Demo mode: Simulating task completion')
+    // For demo mode, return a mock success response
+    return { 
+      data: { 
+        success: true, 
+        task: { id: taskId, completed: true, completed_at: new Date().toISOString() },
+        xp_gained: 25,
+        streak_updated: true,
+        message: 'Task completed successfully (demo mode)'
+      }, 
+      error: null 
+    }
+  }
+
+  try {
+    console.log('Marking task complete:', { taskId, userId, reflection })
+    
+    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mark_task_complete`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        task_id: taskId,
+        user_id: userId,
+        reflection: reflection || null,
+        completion_method: 'manual'
+      }),
+    })
+
+    const result = await response.json()
+    
+    if (!response.ok) {
+      console.error('Error from mark_task_complete function:', result)
+      return { data: null, error: result }
+    }
+
+    console.log('Task completion response:', result)
+    return { data: result, error: null }
+  } catch (error) {
+    console.error('Error calling mark_task_complete function:', error)
+    return { data: null, error: { message: 'Failed to mark task complete' } }
+  }
+}
+
 // Guest user helper functions
 export const continueAsGuest = async () => {
   if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
