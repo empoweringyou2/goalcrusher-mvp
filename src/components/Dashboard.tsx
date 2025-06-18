@@ -1,17 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Calendar, Clock, Plus, ChevronLeft, ChevronRight, Flame, Zap, Target, Edit3, Save, X, Trash2, Users, Bot, UserCheck, Building, CheckCircle } from 'lucide-react';
+import { Calendar, Clock, Plus, ChevronLeft, ChevronRight, Flame, Zap, Target, Edit3, Save, X, Trash2, Users, Bot, UserCheck, Building } from 'lucide-react';
 import { Screen } from '../App';
 import { User, AppConfig } from '../types/user';
 import { markTaskComplete } from '../lib/supabase';
 
 interface Task {
-  id: number;
+  id: string; // Changed from number to string
   title: string;
   time: string;
   duration: number;
   category: string;
   completed: boolean;
   date: Date;
+  completed_at?: Date; // Added completed_at property
   accountability?: {
     type: 'ai' | 'partner' | 'team' | 'public';
     partner?: string;
@@ -31,25 +32,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
   const [currentView, setCurrentView] = useState<'day' | 'week' | 'month' | 'year' | 'schedule'>('day');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [draggedTask, setDraggedTask] = useState<Task | null>(null);
-  const [editingTask, setEditingTask] = useState<number | null>(null);
+  const [editingTask, setEditingTask] = useState<string | null>(null); // Changed to string
   const [editForm, setEditForm] = useState<Partial<Task>>({});
-  const [showAccountabilityModal, setShowAccountabilityModal] = useState<number | null>(null);
-  const [completingTask, setCompletingTask] = useState<number | null>(null);
-  const [showCompletionToast, setShowCompletionToast] = useState<{
-    show: boolean;
-    message: string;
-    xp?: number;
-  }>({ show: false, message: '' });
+  const [showAccountabilityModal, setShowAccountabilityModal] = useState<string | null>(null); // Changed to string
 
   const [tasks, setTasks] = useState<Task[]>([
     { 
-      id: 1, 
+      id: '1', // Changed to string
       title: 'Morning Meditation', 
       time: '07:00', 
       duration: 20, 
       category: 'wellness', 
       completed: true, 
       date: new Date(),
+      completed_at: new Date(Date.now() - 3600000), // 1 hour ago
       accountability: {
         type: 'partner',
         partner: 'Sarah',
@@ -59,7 +55,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
       }
     },
     { 
-      id: 2, 
+      id: '2', // Changed to string
       title: 'Project Review', 
       time: '09:15', 
       duration: 60, 
@@ -73,10 +69,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
         rewards: 'Project milestone bonus'
       }
     },
-    { id: 3, title: 'Quick Call', time: '10:30', duration: 15, category: 'work', completed: false, date: new Date() },
-    { id: 4, title: 'Lunch Break', time: '12:00', duration: 45, category: 'wellness', completed: false, date: new Date() },
+    { id: '3', title: 'Quick Call', time: '10:30', duration: 15, category: 'work', completed: false, date: new Date() },
+    { id: '4', title: 'Lunch Break', time: '12:00', duration: 45, category: 'wellness', completed: false, date: new Date() },
     { 
-      id: 5, 
+      id: '5', 
       title: 'Gym Workout', 
       time: '18:00', 
       duration: 90, 
@@ -90,9 +86,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
         rewards: 'Unlock new fitness achievement'
       }
     },
-    { id: 6, title: 'Read 20 pages', time: '21:15', duration: 30, category: 'growth', completed: false, date: new Date() },
-    { id: 7, title: 'Team Meeting', time: '14:00', duration: 45, category: 'work', completed: false, date: new Date(Date.now() + 86400000) },
-    { id: 8, title: 'Yoga Session', time: '08:30', duration: 30, category: 'wellness', completed: false, date: new Date(Date.now() + 86400000) },
+    { id: '6', title: 'Read 20 pages', time: '21:15', duration: 30, category: 'growth', completed: false, date: new Date() },
+    { id: '7', title: 'Team Meeting', time: '14:00', duration: 45, category: 'work', completed: false, date: new Date(Date.now() + 86400000) },
+    { id: '8', title: 'Yoga Session', time: '08:30', duration: 30, category: 'wellness', completed: false, date: new Date(Date.now() + 86400000) },
   ]);
 
   const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -123,16 +119,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
     goalName: "Launch MVP",
     daysLeft: 3
   };
-
-  // Auto-hide completion toast
-  useEffect(() => {
-    if (showCompletionToast.show) {
-      const timer = setTimeout(() => {
-        setShowCompletionToast({ show: false, message: '' });
-      }, 4000);
-      return () => clearTimeout(timer);
-    }
-  }, [showCompletionToast.show]);
 
   const getCategoryColor = (category: string) => {
     const colors = {
@@ -248,90 +234,67 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
     setEditForm({});
   };
 
-  const deleteTask = (taskId: number) => {
+  const deleteTask = (taskId: string) => { // Changed parameter type to string
     setTasks(prevTasks => prevTasks.filter(task => task.id !== taskId));
   };
 
-  const toggleTaskComplete = async (taskId: number) => {
+  // Updated toggleTaskComplete function with backend integration
+  const toggleTaskComplete = async (taskId: string) => {
+    // Find the task in local state
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
 
-    // If task is already completed, just toggle it locally
+    // If task is already completed, don't allow unchecking (backend only supports marking complete)
     if (task.completed) {
-      setTasks(prevTasks =>
-        prevTasks.map(t =>
-          t.id === taskId
-            ? { ...t, completed: false }
-            : t
-        )
-      );
+      console.log('Task is already completed');
       return;
     }
 
-    // Mark as completing to show loading state
-    setCompletingTask(taskId);
-
     try {
-      // Call the mark_task_complete function
-      const { data, error } = await markTaskComplete(
-        taskId.toString(), 
-        user.id,
-        `Completed via dashboard on ${new Date().toLocaleDateString()}`
-      );
-
+      console.log('Marking task complete:', taskId);
+      
+      // Call the backend function to mark task complete
+      const { data, error } = await markTaskComplete(taskId, user.id, 'manual');
+      
       if (error) {
         console.error('Error marking task complete:', error);
-        setShowCompletionToast({
-          show: true,
-          message: 'Failed to mark task complete. Please try again.',
-        });
+        // You could show a toast notification here
         return;
       }
 
-      // Update the task locally
+      console.log('Task completion response:', data);
+
+      // Update local state on success
       setTasks(prevTasks =>
         prevTasks.map(t =>
           t.id === taskId
-            ? { ...t, completed: true }
+            ? { 
+                ...t, 
+                completed: true, 
+                completed_at: new Date() 
+              }
             : t
         )
       );
 
-      // Show success toast with XP gained
-      setShowCompletionToast({
-        show: true,
-        message: `🎉 Task completed! ${data?.xp_gained ? `+${data.xp_gained} XP` : ''}`,
-        xp: data?.xp_gained
-      });
-
-      // If there's accountability, show additional message
-      if (task.accountability) {
-        setTimeout(() => {
-          setShowCompletionToast({
-            show: true,
-            message: `✅ Accountability logged for ${getAccountabilityTypeInfo(task.accountability!.type).title}`,
-          });
-        }, 2000);
+      // Show success feedback (you could replace this with a toast notification)
+      if (data?.xp_gained) {
+        console.log(`Task completed! +${data.xp_gained} XP gained`);
       }
 
-    } catch (error) {
-      console.error('Unexpected error marking task complete:', error);
-      setShowCompletionToast({
-        show: true,
-        message: 'An unexpected error occurred. Please try again.',
-      });
-    } finally {
-      setCompletingTask(null);
+    } catch (err) {
+      console.error('Unexpected error marking task complete:', err);
+      // You could show an error toast notification here
     }
   };
 
-  const handleCheckIn = (taskId: number) => {
+  const handleCheckIn = (taskId: string) => { // Changed parameter type to string
     // Simulate check-in action
     alert('Check-in recorded! Great job staying accountable! 🎉');
     setShowAccountabilityModal(null);
   };
 
-  const handleEditAccountability = (taskId: number) => {
+  const handleEditAccountability = (taskId: string) => { // Changed parameter type to string
     // This would open an accountability editing modal/form
     alert('Opening accountability editor... (Feature coming soon!)');
     setShowAccountabilityModal(null);
@@ -641,7 +604,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
                 const heightInPixels = (task.duration / 15) * 16; // 16px per 15-minute slot
                 const topPosition = (startMinutes / 15) * 16; // 16px per 15-minute slot
                 const isEditing = editingTask === task.id;
-                const isCompleting = completingTask === task.id;
                 const accountabilityInfo = task.accountability ? getAccountabilityTypeInfo(task.accountability.type) : null;
 
                 if (isEditing) {
@@ -729,31 +691,25 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
                         <div className={`font-medium leading-tight flex-1 ${task.completed ? 'line-through' : ''}`}>
                           {task.title}
                         </div>
-                        
-                        {/* Completion checkbox */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleTaskComplete(task.id);
-                          }}
-                          disabled={isCompleting}
-                          className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${
-                            task.completed 
-                              ? 'bg-green-500 border-green-500' 
-                              : 'border-white/50 hover:border-white'
-                          } ${isCompleting ? 'animate-pulse' : ''}`}
-                        >
-                          {isCompleting ? (
-                            <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
-                          ) : task.completed ? (
-                            <CheckCircle className="w-3 h-3 text-white" />
-                          ) : null}
-                        </button>
+                        {/* Completion Checkbox */}
+                        <input
+                          type="checkbox"
+                          checked={task.completed}
+                          onChange={() => toggleTaskComplete(task.id)}
+                          disabled={task.completed}
+                          className="w-3 h-3 rounded border-white/30 text-white focus:ring-white/50 bg-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                          onClick={(e) => e.stopPropagation()}
+                        />
                       </div>
                       
                       {heightInPixels > 24 && (
                         <div className="text-xs opacity-75 mt-0.5">
                           {task.time} • {task.duration}min
+                          {task.completed && task.completed_at && (
+                            <span className="block text-green-300">
+                              ✓ Completed {task.completed_at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          )}
                         </div>
                       )}
 
@@ -773,7 +729,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
                       )}
                       
                       {/* Task controls - only visible on hover */}
-                      <div className="absolute top-1 right-6 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                      <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -873,7 +829,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
                     )
                     .map(task => {
                       const accountabilityInfo = task.accountability ? getAccountabilityTypeInfo(task.accountability.type) : null;
-                      const isCompleting = completingTask === task.id;
                       
                       return (
                         <div
@@ -889,26 +844,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
                             <div className={`font-medium flex-1 ${task.completed ? 'line-through' : ''}`}>
                               {task.title}
                             </div>
-                            
-                            {/* Completion checkbox for week view */}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleTaskComplete(task.id);
-                              }}
-                              disabled={isCompleting}
-                              className={`w-3 h-3 rounded border flex items-center justify-center transition-all ${
-                                task.completed 
-                                  ? 'bg-green-500 border-green-500' 
-                                  : 'border-white/50 hover:border-white'
-                              } ${isCompleting ? 'animate-pulse' : ''}`}
-                            >
-                              {isCompleting ? (
-                                <div className="w-1 h-1 bg-white rounded-full animate-pulse" />
-                              ) : task.completed ? (
-                                <CheckCircle className="w-2 h-2 text-white" />
-                              ) : null}
-                            </button>
+                            {/* Completion Checkbox for Week View */}
+                            <input
+                              type="checkbox"
+                              checked={task.completed}
+                              onChange={() => toggleTaskComplete(task.id)}
+                              disabled={task.completed}
+                              className="w-3 h-3 rounded border-white/30 text-white focus:ring-white/50 bg-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                              onClick={(e) => e.stopPropagation()}
+                            />
                           </div>
                           <div className="text-xs opacity-75">{task.duration}min</div>
                           
@@ -996,7 +940,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
                 <div className="space-y-1">
                   {dayTasks.slice(0, 2).map(task => {
                     const accountabilityInfo = task.accountability ? getAccountabilityTypeInfo(task.accountability.type) : null;
-                    const isCompleting = completingTask === task.id;
                     
                     return (
                       <div
@@ -1005,28 +948,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
                         onDragStart={(e) => handleDragStart(e, task)}
                         className={`text-xs p-1 rounded cursor-move hover:scale-105 transition-transform ${getCategoryColor(task.category)} text-white flex items-center gap-1`}
                       >
-                        <div className={`truncate flex-1 ${task.completed ? 'line-through' : ''}`}>{task.title}</div>
-                        
-                        {/* Completion checkbox for month view */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleTaskComplete(task.id);
-                          }}
-                          disabled={isCompleting}
-                          className={`w-3 h-3 rounded border flex items-center justify-center transition-all ${
-                            task.completed 
-                              ? 'bg-green-500 border-green-500' 
-                              : 'border-white/50 hover:border-white'
-                          } ${isCompleting ? 'animate-pulse' : ''}`}
-                        >
-                          {isCompleting ? (
-                            <div className="w-1 h-1 bg-white rounded-full animate-pulse" />
-                          ) : task.completed ? (
-                            <CheckCircle className="w-2 h-2 text-white" />
-                          ) : null}
-                        </button>
-                        
+                        <div className={`truncate flex-1 ${task.completed ? 'line-through opacity-60' : ''}`}>
+                          {task.title}
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={task.completed}
+                          onChange={() => toggleTaskComplete(task.id)}
+                          disabled={task.completed}
+                          className="w-2 h-2 rounded border-white/30 text-white focus:ring-white/50 bg-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                          onClick={(e) => e.stopPropagation()}
+                        />
                         {task.accountability && accountabilityInfo && (
                           <div className="flex items-center gap-1 mt-1">
                             <accountabilityInfo.icon className="w-2 h-2" />
@@ -1080,7 +1012,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
                     
                     return (
                       <div key={task.id} className="text-xs text-gray-300 truncate flex items-center gap-1">
-                        <span className="flex-1">{task.title}</span>
+                        <span className={`flex-1 ${task.completed ? 'line-through opacity-60' : ''}`}>{task.title}</span>
                         {task.accountability && accountabilityInfo && (
                           <accountabilityInfo.icon className="w-2 h-2 opacity-75" />
                         )}
@@ -1106,7 +1038,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
           .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
           .map(task => {
             const accountabilityInfo = task.accountability ? getAccountabilityTypeInfo(task.accountability.type) : null;
-            const isCompleting = completingTask === task.id;
             
             return (
               <div key={task.id} className="p-4 hover:bg-gray-800/50 transition-colors group">
@@ -1123,6 +1054,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
                       <span>{task.time}</span>
                       <span>{task.duration} min</span>
                       <span className="capitalize">{task.category}</span>
+                      {task.completed && task.completed_at && (
+                        <span className="text-green-400">
+                          ✓ Completed {task.completed_at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      )}
                     </div>
                     
                     {/* Accountability Button in Schedule View */}
@@ -1150,21 +1086,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
                     >
                       <Trash2 className="w-4 h-4 text-red-400" />
                     </button>
-                    <button
-                      onClick={() => toggleTaskComplete(task.id)}
-                      disabled={isCompleting}
-                      className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
-                        task.completed 
-                          ? 'bg-green-500 border-green-500' 
-                          : 'border-gray-600 hover:border-yellow-400'
-                      } ${isCompleting ? 'animate-pulse' : ''}`}
-                    >
-                      {isCompleting ? (
-                        <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
-                      ) : task.completed ? (
-                        <CheckCircle className="w-3 h-3 text-white" />
-                      ) : null}
-                    </button>
+                    <input
+                      type="checkbox"
+                      checked={task.completed}
+                      onChange={() => toggleTaskComplete(task.id)}
+                      disabled={task.completed}
+                      className="w-5 h-5 rounded border-gray-600 text-yellow-400 focus:ring-yellow-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                    />
                   </div>
                 </div>
               </div>
@@ -1303,19 +1231,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
         <AccountabilityModal 
           task={tasks.find(t => t.id === showAccountabilityModal)!} 
         />
-      )}
-
-      {/* Completion Toast */}
-      {showCompletionToast.show && (
-        <div className="fixed top-4 right-4 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2 animate-in slide-in-from-right">
-          <CheckCircle className="w-5 h-5" />
-          <span className="font-medium">{showCompletionToast.message}</span>
-          {showCompletionToast.xp && (
-            <span className="bg-yellow-400 text-black px-2 py-1 rounded text-sm font-bold">
-              +{showCompletionToast.xp} XP
-            </span>
-          )}
-        </div>
       )}
 
       {/* Drag and Drop Instructions */}
