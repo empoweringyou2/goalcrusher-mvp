@@ -354,6 +354,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ user, appConfig }) => {
                 onChange={(e) => setNewDomainName(e.target.value)}
                 placeholder="Domain name (e.g., Spirituality, Hobbies, Travel)"
                 className="w-full bg-gray-700 text-white px-3 py-2 rounded border border-gray-600 focus:border-yellow-400 focus:outline-none"
+                autoComplete="off"
               />
               
               <div>
@@ -364,6 +365,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ user, appConfig }) => {
                     return (
                       <button
                         key={iconOption.name}
+                        type="button"
                         onClick={() => setNewDomainIcon(iconOption.name)}
                         className={`p-3 rounded-lg border-2 transition-colors ${
                           newDomainIcon === iconOption.name
@@ -380,6 +382,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ user, appConfig }) => {
               
               <div className="flex flex-col md:flex-row gap-2">
                 <button
+                  type="button"
                   onClick={editingDomain ? saveEditDomain : addLifeDomain}
                   disabled={!newDomainName.trim()}
                   className="flex-1 bg-yellow-400 text-black py-2 rounded-lg font-medium hover:bg-yellow-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -388,6 +391,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ user, appConfig }) => {
                 </button>
                 {editingDomain && (
                   <button
+                    type="button"
                     onClick={cancelEditDomain}
                     className="px-4 bg-gray-600 text-white py-2 rounded-lg font-medium hover:bg-gray-700 transition-colors"
                   >
@@ -426,6 +430,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ user, appConfig }) => {
                     
                     <div className="flex gap-2">
                       <button
+                        type="button"
                         onClick={() => startEditingDomain(domain.id)}
                         className="p-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
                         title="Edit"
@@ -434,6 +439,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ user, appConfig }) => {
                       </button>
                       {!domain.isDefault && (
                         <button
+                          type="button"
                           onClick={() => deleteLifeDomain(domain.id)}
                           className="p-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
                           title="Delete"
