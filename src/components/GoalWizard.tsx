@@ -51,7 +51,7 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
       const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
       recognitionRef.current = new SpeechRecognition();
       
-      recognitionRef.current.continuous = false;
+      recognitionRef.current.continuous = true; // Changed from false to true
       recognitionRef.current.interimResults = false;
       recognitionRef.current.lang = 'en-US';
 
