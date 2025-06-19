@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Calendar, Clock, Plus, ChevronLeft, ChevronRight, Flame, Zap, Target, Edit3, Save, X, Trash2, Users, Bot, UserCheck, Building } from 'lucide-react';
 import { Screen } from '../App';
 import { User, AppConfig } from '../types/user';
@@ -34,18 +34,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
   const [editForm, setEditForm] = useState<Partial<Task>>({});
   const [showAccountabilityModal, setShowAccountabilityModal] = useState<number | null>(null);
   
-  // Quick create modal state
+  // Quick Create Modal State
   const [showQuickCreate, setShowQuickCreate] = useState(false);
-  const [quickCreateTime, setQuickCreateTime] = useState('');
-  const [quickCreateDate, setQuickCreateDate] = useState('');
-  const [quickCreateForm, setQuickCreateForm] = useState({
-    type: 'task' as 'task' | 'event' | 'goal',
-    title: '',
-    duration: 30,
-    category: 'general',
-    description: ''
-  });
-
+  const [quickCreateDate, setQuickCreateDate] = useState<string>('');
+  const [quickCreateTime, setQuickCreateTime] = useState<string>('');
+  
+  // Form state - using separate state variables to prevent re-renders
+  const [formTitle, setFormTitle] = useState('');
+  const [formType, setFormType] = useState<'task' | 'event' | 'goal'>('task');
+  const [formDuration, setFormDuration] = useState(30);
+  const [formCategory, setFormCategory] = useState('work');
+  const [formDescription, setFormDescription] = useState('');
+  
   // Ref for the title input to maintain focus
   const titleInputRef = useRef<HTMLInputElement>(null);
 
@@ -138,7 +138,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
       work: 'bg-blue-500',
       fitness: 'bg-red-500',
       growth: 'bg-purple-500',
-      general: 'bg-gray-500',
     };
     return colors[category as keyof typeof colors] || 'bg-gray-500';
   };
@@ -186,6 +185,64 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
           buttonColor: 'bg-gray-500 hover:bg-gray-600'
         };
     }
+  };
+
+  // Stable callback for handling title changes
+  const handleTitleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormTitle(e.target.value);
+  }, []);
+
+  // Focus the title input when modal opens
+  useEffect(() => {
+    if (showQuickCreate && titleInputRef.current) {
+      // Small delay to ensure the modal is fully rendered
+      const timer = setTimeout(() => {
+        titleInputRef.current?.focus();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [showQuickCreate]);
+
+  // Quick Create Functions
+  const openQuickCreate = (date: string, time: string) => {
+    setQuickCreateDate(date);
+    setQuickCreateTime(time);
+    setShowQuickCreate(true);
+    // Reset form
+    setFormTitle('');
+    setFormType('task');
+    setFormDuration(30);
+    setFormCategory('work');
+    setFormDescription('');
+  };
+
+  const closeQuickCreate = () => {
+    setShowQuickCreate(false);
+    setQuickCreateDate('');
+    setQuickCreateTime('');
+    // Reset form
+    setFormTitle('');
+    setFormType('task');
+    setFormDuration(30);
+    setFormCategory('work');
+    setFormDescription('');
+  };
+
+  const handleQuickCreateSubmit = () => {
+    if (!formTitle.trim()) return;
+
+    const newTask: Task = {
+      id: Date.now(),
+      title: formTitle,
+      time: quickCreateTime,
+      duration: formDuration,
+      category: formCategory,
+      completed: false,
+      date: new Date(quickCreateDate)
+    };
+
+    setTasks(prev => [...prev, newTask]);
+    closeQuickCreate();
   };
 
   // Drag and Drop Functions
@@ -272,68 +329,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
     alert('Opening accountability editor... (Feature coming soon!)');
     setShowAccountabilityModal(null);
   };
-
-  // Quick Create Functions
-  const handleQuickCreateClick = (timeString: string, date: Date) => {
-    setQuickCreateTime(timeString);
-    setQuickCreateDate(date.toISOString().split('T')[0]);
-    setQuickCreateForm({
-      type: 'task',
-      title: '',
-      duration: 30,
-      category: 'general',
-      description: ''
-    });
-    setShowQuickCreate(true);
-    
-    // Focus the input after the modal opens
-    setTimeout(() => {
-      if (titleInputRef.current) {
-        titleInputRef.current.focus();
-      }
-    }, 100);
-  };
-
-  const handleQuickCreateSubmit = () => {
-    if (!quickCreateForm.title.trim()) return;
-
-    const newTask: Task = {
-      id: Date.now(),
-      title: quickCreateForm.title,
-      time: quickCreateTime,
-      duration: quickCreateForm.duration,
-      category: quickCreateForm.category,
-      completed: false,
-      date: new Date(quickCreateDate)
-    };
-
-    setTasks(prevTasks => [...prevTasks, newTask]);
-    setShowQuickCreate(false);
-    setQuickCreateForm({
-      type: 'task',
-      title: '',
-      duration: 30,
-      category: 'general',
-      description: ''
-    });
-  };
-
-  const handleQuickCreateCancel = () => {
-    setShowQuickCreate(false);
-    setQuickCreateForm({
-      type: 'task',
-      title: '',
-      duration: 30,
-      category: 'general',
-      description: ''
-    });
-  };
-
-  // Use useCallback to prevent re-rendering of input
-  const handleTitleChange = React.useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const newTitle = e.target.value;
-    setQuickCreateForm(prev => ({ ...prev, title: newTitle }));
-  }, []);
 
   const navigateDate = (direction: 'prev' | 'next') => {
     const newDate = new Date(currentDate);
@@ -593,118 +588,113 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
       <div className="bg-gray-900 rounded-xl border border-gray-800 max-w-md w-full">
         <div className="p-4 border-b border-gray-800">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-white">
-              Quick Create {quickCreateForm.type.charAt(0).toUpperCase() + quickCreateForm.type.slice(1)}
-            </h3>
+            <h3 className="text-lg font-semibold text-white">Quick Create</h3>
             <button
-              onClick={handleQuickCreateCancel}
+              onClick={closeQuickCreate}
               className="p-1 hover:bg-gray-800 rounded"
             >
               <X className="w-5 h-5 text-gray-400" />
             </button>
           </div>
           <p className="text-sm text-gray-400 mt-1">
-            {quickCreateDate} at {quickCreateTime}
+            {new Date(quickCreateDate).toLocaleDateString()} at {quickCreateTime}
           </p>
         </div>
         
         <div className="p-4 space-y-4">
-          {/* Type selector */}
-          <div className="flex bg-gray-800 rounded-lg p-1">
-            {(['task', 'event', 'goal'] as const).map((type) => (
-              <button
-                key={type}
-                onClick={() => setQuickCreateForm(prev => ({ ...prev, type }))}
-                className={`flex-1 px-3 py-2 rounded-md text-sm font-medium capitalize transition-colors ${
-                  quickCreateForm.type === type
-                    ? 'bg-yellow-400 text-black'
-                    : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                {type}
-              </button>
-            ))}
+          {/* Type Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Type</label>
+            <div className="flex bg-gray-800 rounded-lg p-1">
+              {(['task', 'event', 'goal'] as const).map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setFormType(type)}
+                  className={`flex-1 px-3 py-2 rounded-md text-sm font-medium capitalize transition-colors ${
+                    formType === type
+                      ? 'bg-yellow-400 text-black'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  {type}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* Title input with stable key */}
+          {/* Title Input - This is the problematic input */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              {quickCreateForm.type === 'task' ? 'Task' : quickCreateForm.type === 'event' ? 'Event' : 'Goal'} Title
+              {formType === 'task' ? 'Task' : formType === 'event' ? 'Event' : 'Goal'} Title
             </label>
             <input
-              key="title-input" // Stable key to prevent re-mounting
               ref={titleInputRef}
               type="text"
-              value={quickCreateForm.title}
+              value={formTitle}
               onChange={handleTitleChange}
-              placeholder={`Enter ${quickCreateForm.type} title...`}
+              placeholder={`Enter ${formType} title...`}
               className="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 focus:border-yellow-400 focus:outline-none"
-              autoFocus
               autoComplete="off"
+              autoFocus
             />
           </div>
 
           {/* Duration */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Duration (minutes)
-            </label>
-            <input
-              type="number"
-              value={quickCreateForm.duration}
-              onChange={(e) => setQuickCreateForm(prev => ({ ...prev, duration: parseInt(e.target.value) || 30 }))}
-              className="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 focus:border-yellow-400 focus:outline-none"
-              min="5"
-              max="480"
-            />
-          </div>
-
-          {/* Category */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Category
-            </label>
-            <select
-              value={quickCreateForm.category}
-              onChange={(e) => setQuickCreateForm(prev => ({ ...prev, category: e.target.value }))}
-              className="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 focus:border-yellow-400 focus:outline-none"
-            >
-              <option value="general">General</option>
-              <option value="work">Work</option>
-              <option value="wellness">Wellness</option>
-              <option value="fitness">Fitness</option>
-              <option value="growth">Growth</option>
-            </select>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Duration (min)</label>
+              <input
+                type="number"
+                value={formDuration}
+                onChange={(e) => setFormDuration(parseInt(e.target.value) || 30)}
+                className="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 focus:border-yellow-400 focus:outline-none"
+                min="5"
+                max="480"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Category</label>
+              <select
+                value={formCategory}
+                onChange={(e) => setFormCategory(e.target.value)}
+                className="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 focus:border-yellow-400 focus:outline-none"
+              >
+                <option value="work">Work</option>
+                <option value="wellness">Wellness</option>
+                <option value="fitness">Fitness</option>
+                <option value="growth">Growth</option>
+              </select>
+            </div>
           </div>
 
           {/* Description */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Description (optional)
-            </label>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Description (optional)</label>
             <textarea
-              value={quickCreateForm.description}
-              onChange={(e) => setQuickCreateForm(prev => ({ ...prev, description: e.target.value }))}
-              placeholder="Add any additional details..."
+              value={formDescription}
+              onChange={(e) => setFormDescription(e.target.value)}
+              placeholder="Add details..."
               className="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 focus:border-yellow-400 focus:outline-none resize-none"
-              rows={3}
+              rows={2}
             />
           </div>
 
-          {/* Action buttons */}
+          {/* Action Buttons */}
           <div className="flex gap-3 pt-2">
             <button
-              onClick={handleQuickCreateCancel}
+              onClick={closeQuickCreate}
               className="flex-1 bg-gray-700 text-white py-2 px-4 rounded-lg font-medium hover:bg-gray-600 transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleQuickCreateSubmit}
-              disabled={!quickCreateForm.title.trim()}
+              disabled={!formTitle.trim()}
               className="flex-1 bg-yellow-400 text-black py-2 px-4 rounded-lg font-medium hover:bg-yellow-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Create {quickCreateForm.type.charAt(0).toUpperCase() + quickCreateForm.type.slice(1)}
+              Create {formType}
             </button>
           </div>
         </div>
@@ -748,18 +738,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
             {timeSlots.map((slot, index) => (
               <div
                 key={`bg-${slot.hour}-${slot.minute}`}
-                className={`h-4 border-b border-gray-800/30 hover:bg-gray-800/20 transition-colors cursor-pointer group ${
+                className={`h-4 border-b border-gray-800/30 hover:bg-gray-800/20 transition-colors cursor-pointer ${
                   slot.minute === 0 ? 'border-gray-700' : ''
                 }`}
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, slot.timeString, currentDate)}
-                onClick={() => handleQuickCreateClick(slot.timeString, currentDate)}
-              >
-                {/* Quick create indicator */}
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center h-full">
-                  <Plus className="w-3 h-3 text-gray-500" />
-                </div>
-              </div>
+                onClick={() => openQuickCreate(currentDate.toISOString().split('T')[0], slot.timeString)}
+                title="Click to create new task/event/goal"
+              />
             ))}
 
             {/* Tasks positioned absolutely */}
@@ -970,16 +956,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
               return (
                 <div 
                   key={`${day}-${hour}`} 
-                  className="border-r border-gray-800 last:border-r-0 p-2 relative hover:bg-gray-800/20 transition-colors cursor-pointer group"
+                  className="border-r border-gray-800 last:border-r-0 p-2 relative hover:bg-gray-800/20 transition-colors cursor-pointer"
                   onDragOver={handleDragOver}
                   onDrop={(e) => handleDrop(e, hourTime, dayDate)}
-                  onClick={() => handleQuickCreateClick(hourTime, dayDate)}
+                  onClick={() => openQuickCreate(dayDate.toISOString().split('T')[0], hourTime)}
+                  title="Click to create new task/event/goal"
                 >
-                  {/* Quick create indicator */}
-                  <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center h-full absolute inset-0">
-                    <Plus className="w-4 h-4 text-gray-500" />
-                  </div>
-                  
                   {tasks
                     .filter(task => 
                       parseInt(task.time.split(':')[0]) === hour &&
@@ -1075,26 +1057,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
             return (
               <div
                 key={index}
-                className={`min-h-[80px] p-2 border-r border-b border-gray-800 last:border-r-0 hover:bg-gray-800/20 transition-colors cursor-pointer group ${
+                className={`min-h-[80px] p-2 border-r border-b border-gray-800 last:border-r-0 hover:bg-gray-800/20 transition-colors cursor-pointer ${
                   !isCurrentMonth ? 'bg-gray-800/50' : ''
                 }`}
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, '09:00', day)}
-                onClick={() => handleQuickCreateClick('09:00', day)}
+                onClick={() => openQuickCreate(day.toISOString().split('T')[0], '09:00')}
+                title="Click to create new task/event/goal"
               >
                 <div className={`text-sm font-medium mb-1 ${
                   isToday ? 'text-yellow-400' : isCurrentMonth ? 'text-white' : 'text-gray-500'
                 }`}>
                   {day.getDate()}
                 </div>
-                
-                {/* Quick create indicator */}
-                {dayTasks.length === 0 && (
-                  <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center h-8">
-                    <Plus className="w-4 h-4 text-gray-500" />
-                  </div>
-                )}
-                
                 <div className="space-y-1">
                   {dayTasks.slice(0, 2).map(task => {
                     const accountabilityInfo = task.accountability ? getAccountabilityTypeInfo(task.accountability.type) : null;
@@ -1389,8 +1364,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
 
       {/* Quick Create Instructions */}
       {!showQuickCreate && (
-        <div className="fixed bottom-20 md:bottom-4 right-4 bg-blue-500/20 border border-blue-500/40 text-blue-400 p-3 rounded-lg text-sm font-medium z-40">
-          💡 Click any time slot to quickly add tasks, events, or goals!
+        <div className="fixed bottom-20 md:bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-80 bg-blue-500/20 border border-blue-500/40 text-blue-400 p-3 rounded-lg shadow-lg z-40">
+          <p className="text-sm font-medium">
+            💡 Click any time slot to quickly create tasks, events, or goals!
+          </p>
         </div>
       )}
     </div>
