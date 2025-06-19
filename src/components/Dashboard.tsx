@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Calendar, Clock, ChevronLeft, ChevronRight, Flame, Zap, Target, Edit3, Save, X, Trash2, Users, Bot, UserCheck, Building } from 'lucide-react';
+import { Calendar, Clock, ChevronLeft, ChevronRight, Flame, Zap, Target, Edit3, Save, X, Trash2, Users, Bot, UserCheck, Building, Plus } from 'lucide-react';
 import { Screen } from '../App';
 import { User, AppConfig } from '../types/user';
 
@@ -26,6 +26,20 @@ interface DashboardProps {
   appConfig: AppConfig;
 }
 
+interface NewItemForm {
+  title: string;
+  duration: number;
+  category: string;
+  type: 'task' | 'event' | 'goal';
+  description?: string;
+}
+
+interface QuickCreateModal {
+  show: boolean;
+  timeSlot: string;
+  date: Date;
+}
+
 export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfig }) => {
   const [currentView, setCurrentView] = useState<'day' | 'week' | 'month' | 'year' | 'schedule'>('day');
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -33,6 +47,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
   const [editingTask, setEditingTask] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<Partial<Task>>({});
   const [showAccountabilityModal, setShowAccountabilityModal] = useState<number | null>(null);
+  const [quickCreateModal, setQuickCreateModal] = useState<QuickCreateModal>({ show: false, timeSlot: '', date: new Date() });
+  const [newItemForm, setNewItemForm] = useState<NewItemForm>({
+    title: '',
+    duration: 30,
+    category: 'work',
+    type: 'task',
+    description: ''
+  });
 
   const [tasks, setTasks] = useState<Task[]>([
     { 
@@ -170,6 +192,44 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
           buttonColor: 'bg-gray-500 hover:bg-gray-600'
         };
     }
+  };
+
+  // Handle time slot click to create new item
+  const handleTimeSlotClick = (timeString: string, date: Date) => {
+    setQuickCreateModal({ show: true, timeSlot: timeString, date });
+    setNewItemForm({
+      title: '',
+      duration: 30,
+      category: 'work',
+      type: 'task',
+      description: ''
+    });
+  };
+
+  // Handle creating new item
+  const handleCreateNewItem = () => {
+    if (!newItemForm.title.trim()) return;
+
+    const newId = Math.max(...tasks.map(t => t.id)) + 1;
+    const newItem: Task = {
+      id: newId,
+      title: newItemForm.title,
+      time: quickCreateModal.timeSlot,
+      duration: newItemForm.duration,
+      category: newItemForm.category,
+      completed: false,
+      date: quickCreateModal.date
+    };
+
+    setTasks(prev => [...prev, newItem]);
+    setQuickCreateModal({ show: false, timeSlot: '', date: new Date() });
+    setNewItemForm({
+      title: '',
+      duration: 30,
+      category: 'work',
+      type: 'task',
+      description: ''
+    });
   };
 
   // Drag and Drop Functions
@@ -509,6 +569,142 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
     );
   };
 
+  // Quick Create Modal Component
+  const QuickCreateModalComponent = () => (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-gray-900 rounded-xl border border-gray-800 max-w-md w-full">
+        <div className="p-4 border-b border-gray-800">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+              <Plus className="w-5 h-5 text-yellow-400" />
+              Create New Item
+            </h3>
+            <button
+              onClick={() => setQuickCreateModal({ show: false, timeSlot: '', date: new Date() })}
+              className="p-1 hover:bg-gray-800 rounded"
+            >
+              <X className="w-5 h-5 text-gray-400" />
+            </button>
+          </div>
+          <p className="text-sm text-gray-400 mt-1">
+            {quickCreateModal.timeSlot} on {quickCreateModal.date.toLocaleDateString()}
+          </p>
+        </div>
+        
+        <div className="p-4 space-y-4">
+          {/* Type Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Type</label>
+            <div className="grid grid-cols-3 gap-2">
+              {(['task', 'event', 'goal'] as const).map((type) => (
+                <button
+                  key={type}
+                  onClick={() => setNewItemForm(prev => ({ ...prev, type }))}
+                  className={`p-2 rounded-lg border-2 transition-colors capitalize ${
+                    newItemForm.type === type
+                      ? 'border-yellow-400 bg-yellow-400/10 text-yellow-400'
+                      : 'border-gray-600 text-gray-400 hover:border-gray-500'
+                  }`}
+                >
+                  {type}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Title */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              {newItemForm.type === 'task' ? 'Task' : newItemForm.type === 'event' ? 'Event' : 'Goal'} Title
+            </label>
+            <input
+              type="text"
+              value={newItemForm.title}
+              onChange={(e) => setNewItemForm(prev => ({ ...prev, title: e.target.value }))}
+              placeholder={`Enter ${newItemForm.type} title...`}
+              className="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 focus:border-yellow-400 focus:outline-none"
+              autoFocus
+            />
+          </div>
+
+          {/* Duration */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Duration (minutes)</label>
+            <div className="grid grid-cols-4 gap-2">
+              {[15, 30, 60, 90].map((duration) => (
+                <button
+                  key={duration}
+                  onClick={() => setNewItemForm(prev => ({ ...prev, duration }))}
+                  className={`p-2 rounded border transition-colors ${
+                    newItemForm.duration === duration
+                      ? 'border-yellow-400 bg-yellow-400/10 text-yellow-400'
+                      : 'border-gray-600 text-gray-400 hover:border-gray-500'
+                  }`}
+                >
+                  {duration}m
+                </button>
+              ))}
+            </div>
+            <input
+              type="number"
+              value={newItemForm.duration}
+              onChange={(e) => setNewItemForm(prev => ({ ...prev, duration: parseInt(e.target.value) || 30 }))}
+              className="w-full mt-2 bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 focus:border-yellow-400 focus:outline-none"
+              placeholder="Custom duration"
+              min="5"
+              max="480"
+            />
+          </div>
+
+          {/* Category */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Category</label>
+            <select
+              value={newItemForm.category}
+              onChange={(e) => setNewItemForm(prev => ({ ...prev, category: e.target.value }))}
+              className="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 focus:border-yellow-400 focus:outline-none"
+            >
+              <option value="work">Work</option>
+              <option value="wellness">Wellness</option>
+              <option value="fitness">Fitness</option>
+              <option value="growth">Growth</option>
+              <option value="personal">Personal</option>
+            </select>
+          </div>
+
+          {/* Description (optional) */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Description (optional)</label>
+            <textarea
+              value={newItemForm.description}
+              onChange={(e) => setNewItemForm(prev => ({ ...prev, description: e.target.value }))}
+              placeholder="Add any additional details..."
+              className="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 focus:border-yellow-400 focus:outline-none resize-none"
+              rows={2}
+            />
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex gap-2 pt-2">
+            <button
+              onClick={() => setQuickCreateModal({ show: false, timeSlot: '', date: new Date() })}
+              className="flex-1 bg-gray-700 text-white py-2 px-4 rounded-lg font-medium hover:bg-gray-600 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleCreateNewItem}
+              disabled={!newItemForm.title.trim()}
+              className="flex-1 bg-yellow-400 text-black py-2 px-4 rounded-lg font-medium hover:bg-yellow-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Create {newItemForm.type}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   const renderDayView = () => (
     <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
       {/* Header */}
@@ -541,16 +737,23 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
 
           {/* Tasks column */}
           <div className="relative">
-            {/* Background grid with drop zones */}
+            {/* Background grid with drop zones and click handlers */}
             {timeSlots.map((slot, index) => (
               <div
                 key={`bg-${slot.hour}-${slot.minute}`}
-                className={`h-4 border-b border-gray-800/30 hover:bg-gray-800/20 transition-colors ${
+                className={`h-4 border-b border-gray-800/30 hover:bg-gray-800/40 transition-colors cursor-pointer group ${
                   slot.minute === 0 ? 'border-gray-700' : ''
                 }`}
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, slot.timeString, currentDate)}
-              />
+                onClick={() => handleTimeSlotClick(slot.timeString, currentDate)}
+                title={`Click to add task/event at ${slot.timeString}`}
+              >
+                {/* Plus icon on hover */}
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center h-full">
+                  <Plus className="w-3 h-3 text-gray-400" />
+                </div>
+              </div>
             ))}
 
             {/* Tasks positioned absolutely */}
@@ -761,10 +964,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
               return (
                 <div 
                   key={`${day}-${hour}`} 
-                  className="border-r border-gray-800 last:border-r-0 p-2 relative hover:bg-gray-800/20 transition-colors"
+                  className="border-r border-gray-800 last:border-r-0 p-2 relative hover:bg-gray-800/20 transition-colors cursor-pointer group"
                   onDragOver={handleDragOver}
                   onDrop={(e) => handleDrop(e, hourTime, dayDate)}
+                  onClick={() => handleTimeSlotClick(hourTime, dayDate)}
+                  title={`Click to add task/event at ${hourTime} on ${dayDate.toLocaleDateString()}`}
                 >
+                  {/* Plus icon on hover */}
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute inset-0 flex items-center justify-center">
+                    <Plus className="w-4 h-4 text-gray-400" />
+                  </div>
+
                   {tasks
                     .filter(task => 
                       parseInt(task.time.split(':')[0]) === hour &&
@@ -860,16 +1070,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
             return (
               <div
                 key={index}
-                className={`min-h-[80px] p-2 border-r border-b border-gray-800 last:border-r-0 hover:bg-gray-800/20 transition-colors ${
+                className={`min-h-[80px] p-2 border-r border-b border-gray-800 last:border-r-0 hover:bg-gray-800/20 transition-colors cursor-pointer group ${
                   !isCurrentMonth ? 'bg-gray-800/50' : ''
                 }`}
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, '09:00', day)}
+                onClick={() => handleTimeSlotClick('09:00', day)}
+                title={`Click to add task/event on ${day.toLocaleDateString()}`}
               >
-                <div className={`text-sm font-medium mb-1 ${
+                <div className={`text-sm font-medium mb-1 flex items-center justify-between ${
                   isToday ? 'text-yellow-400' : isCurrentMonth ? 'text-white' : 'text-gray-500'
                 }`}>
-                  {day.getDate()}
+                  <span>{day.getDate()}</span>
+                  <Plus className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
                 <div className="space-y-1">
                   {dayTasks.slice(0, 2).map(task => {
@@ -1136,6 +1349,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
       {/* Dynamic Calendar View */}
       {renderCalendarView()}
 
+      {/* Quick Create Modal */}
+      {quickCreateModal.show && <QuickCreateModalComponent />}
+
       {/* Accountability Modal */}
       {showAccountabilityModal && (
         <AccountabilityModal 
@@ -1151,6 +1367,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
           </p>
         </div>
       )}
+
+      {/* Click to Create Instructions */}
+      <div className="fixed bottom-4 left-4 bg-blue-500/20 border border-blue-500/40 text-blue-400 px-3 py-2 rounded-lg text-sm font-medium z-40">
+        💡 Click any time slot to add tasks, events, or goals
+      </div>
     </div>
   );
 };
