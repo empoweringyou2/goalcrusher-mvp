@@ -527,9 +527,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
   return (
     <div className="p-4 md:p-6 pb-20 md:pb-6">
       {/* Stats Banner */}
-      <div className="bg-gray-900 rounded-xl border border-gray-800 p-4 mb-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="flex items-center gap-3">
+      <div className="bg-gray-900 rounded-xl border border-gray-800 p-1 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-1">
+          <div className="flex items-center gap-3 p-3">
             <div className="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center">
               <Target className="w-5 h-5 text-green-500" />
             </div>
@@ -540,7 +540,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
             </div>
           </div>
           
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 p-3">
             <div className="w-10 h-10 bg-yellow-400/20 rounded-lg flex items-center justify-center">
               <Zap className="w-5 h-5 text-yellow-400" />
             </div>
@@ -551,7 +551,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
             </div>
           </div>
           
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 p-3">
             <div className="w-10 h-10 bg-orange-500/20 rounded-lg flex items-center justify-center">
               <Flame className="w-5 h-5 text-orange-500" />
             </div>
@@ -562,7 +562,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
             </div>
           </div>
           
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 p-3">
             <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center">
               <Trophy className="w-5 h-5 text-purple-500" />
             </div>
@@ -573,25 +573,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Dashboard</h1>
-          <p className="text-gray-400">Manage your goals and track progress</p>
-          {isLoadingSettings && (
-            <p className="text-yellow-400 text-sm mt-1">Loading accountability settings...</p>
-          )}
-        </div>
-        
-        <button
-          onClick={() => onNavigate('goal-wizard')}
-          className="bg-yellow-400 text-black px-4 md:px-6 py-2 md:py-3 rounded-xl font-semibold hover:bg-yellow-300 transition-colors flex items-center gap-2 w-fit"
-        >
-          <Plus className="w-4 h-4 md:w-5 md:h-5" />
-          <span className="text-sm md:text-base">New Goal</span>
-        </button>
       </div>
 
       {/* View Controls */}
