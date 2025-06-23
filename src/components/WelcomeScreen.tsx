@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sparkles, Star, Wand2, UserX, Loader2 } from 'lucide-react';
+import { Sparkles, Star, UserX, Loader2 } from 'lucide-react';
 import { AuthForm } from './AuthForm';
 import { continueAsGuest } from '../lib/supabase';
 
@@ -115,7 +115,11 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onLogin, onBypassL
           {/* Crushion the Wizard */}
           <div className="mb-8 relative">
             <div className="w-32 h-32 mx-auto bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-full flex items-center justify-center shadow-2xl shadow-yellow-400/30">
-              <Wand2 className="w-16 h-16 text-black animate-bounce" />
+              <img 
+                src="/1.jpg" 
+                alt="GoalCrusher Logo"
+                className="w-16 h-16 animate-bounce"
+              />
             </div>
             <div className="absolute -top-4 -right-4 animate-spin">
               <Sparkles className="w-8 h-8 text-yellow-400" />
