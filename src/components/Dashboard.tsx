@@ -598,35 +598,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
         </div>
       </div>
 
-      {/* Accountability Settings Status */}
-      {userSettings && (
-        <div className="bg-gray-900 rounded-xl p-4 border border-gray-800 mb-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Shield className="w-5 h-5 text-yellow-400" />
-              <div>
-                <h3 className="text-white font-medium">Current Accountability Settings</h3>
-                <p className="text-gray-400 text-sm">
-                  {userSettings.accountability_type === 'self' ? 'Self-managed' :
-                   userSettings.accountability_type === 'ai' ? 'AI-powered accountability' :
-                   userSettings.accountability_type === 'partner' ? 'Partner accountability' :
-                   'Team accountability'} • 
-                  {userSettings.completion_method_setting === 'user' ? ' Self-confirmation' :
-                   userSettings.completion_method_setting === 'ai' ? ' AI verification' :
-                   ' External verification'}
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => onNavigate('settings')}
-              className="text-yellow-400 hover:text-yellow-300 text-sm font-medium transition-colors"
-            >
-              Manage Settings
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* View Controls */}
       <div className="flex flex-col md:flex-row gap-4 mb-6">
         {/* View Mode Selector */}
