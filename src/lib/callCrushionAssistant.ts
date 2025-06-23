@@ -55,15 +55,27 @@ export async function sendToCrushion(userInput: string, userId: string, threadId
               user_id: userId
             };
 
-            // Ensure title is always present and valid for create_task function
+            // Enhanced title validation for create_task function
             if (toolCall.function.name === "create_task") {
-              // Check if title is missing, null, undefined, or empty after trimming
-              if (!augmentedArgs.title || typeof augmentedArgs.title !== 'string' || augmentedArgs.title.trim() === "") {
-                augmentedArgs.title = "Untitled Task from AI";
+              // More robust title validation
+              let title = augmentedArgs.title;
+              
+              // Check if title is missing, null, undefined, empty, or not a string
+              if (!title || typeof title !== 'string' || title.trim() === "") {
+                console.warn("Invalid or missing title detected, using default:", title);
+                augmentedArgs.title = "New Task from AI Assistant";
               } else {
-                // Ensure title is trimmed
-                augmentedArgs.title = augmentedArgs.title.trim();
+                // Ensure title is properly trimmed and not just whitespace
+                const trimmedTitle = title.trim();
+                if (trimmedTitle === "") {
+                  console.warn("Title was only whitespace, using default");
+                  augmentedArgs.title = "New Task from AI Assistant";
+                } else {
+                  augmentedArgs.title = trimmedTitle;
+                }
               }
+              
+              console.log("Final task title being sent:", augmentedArgs.title);
             }
             
             // Call your Supabase Edge Function
