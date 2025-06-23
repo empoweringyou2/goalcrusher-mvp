@@ -25,11 +25,20 @@ export const getUserSettings = async (userId: string): Promise<UserSettings | nu
       .from('user_settings')
       .select('accountability_type, completion_method_setting, default_proof_time_minutes')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error('Error fetching user settings:', error);
       return null;
+    }
+
+    // If no settings found, return default settings
+    if (!data) {
+      return {
+        accountability_type: 'self',
+        completion_method_setting: 'user',
+        default_proof_time_minutes: 10
+      };
     }
 
     return data;
