@@ -1,24 +1,53 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Calendar, Clock, Plus, ChevronLeft, ChevronRight, Flame, Zap, Target, Edit3, Save, X, Trash2, Users, Bot, UserCheck, Building } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { 
+  Calendar, 
+  Plus, 
+  ChevronLeft, 
+  ChevronRight, 
+  Clock, 
+  Target, 
+  Zap, 
+  Users, 
+  CheckCircle2,
+  Circle,
+  MoreHorizontal,
+  Edit,
+  Trash2,
+  Copy,
+  ArrowRight,
+  Filter,
+  Search,
+  CalendarDays,
+  List,
+  Grid3X3,
+  BarChart3,
+  Flame,
+  Trophy,
+  Star,
+  TrendingUp,
+  AlertCircle,
+  Coffee,
+  Briefcase,
+  Heart,
+  BookOpen,
+  Home,
+  Dumbbell,
+  Brain,
+  DollarSign,
+  Palette,
+  Music,
+  Camera,
+  Gamepad2,
+  Plane,
+  Shield,
+  MessageCircle,
+  UserCheck,
+  Bot
+} from 'lucide-react';
 import { Screen } from '../App';
 import { User, AppConfig } from '../types/user';
-
-interface Task {
-  id: number;
-  title: string;
-  time: string;
-  duration: number;
-  category: string;
-  completed: boolean;
-  date: Date;
-  accountability?: {
-    type: 'ai' | 'partner' | 'team' | 'public';
-    partner?: string;
-    checkInTime?: string;
-    consequences?: string;
-    rewards?: string;
-  };
-}
+import { TaskCompletionModal } from './TaskCompletionModal';
+import { getUserSettings, UserSettings } from '../lib/taskUtils';
 
 interface DashboardProps {
   onNavigate: (screen: Screen) => void;
@@ -26,338 +55,329 @@ interface DashboardProps {
   appConfig: AppConfig;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfig }) => {
-  const [currentView, setCurrentView] = useState<'day' | 'week' | 'month' | 'year' | 'schedule'>('day');
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [draggedTask, setDraggedTask] = useState<Task | null>(null);
-  const [editingTask, setEditingTask] = useState<number | null>(null);
-  const [editForm, setEditForm] = useState<Partial<Task>>({});
-  const [showAccountabilityModal, setShowAccountabilityModal] = useState<number | null>(null);
-  
-  // Quick Create Modal State
-  const [showQuickCreate, setShowQuickCreate] = useState(false);
-  const [quickCreateDate, setQuickCreateDate] = useState<string>('');
-  const [quickCreateTime, setQuickCreateTime] = useState<string>('');
-  
-  // Form state - using separate state variables to prevent re-renders
-  const [formTitle, setFormTitle] = useState('');
-  const [formType, setFormType] = useState<'task' | 'event' | 'goal'>('task');
-  const [formDuration, setFormDuration] = useState(30);
-  const [formCategory, setFormCategory] = useState('work');
-  const [formDescription, setFormDescription] = useState('');
-  
-  // Ref for the title input to maintain focus
-  const titleInputRef = useRef<HTMLInputElement>(null);
+interface Task {
+  id: string;
+  title: string;
+  description?: string;
+  category: string;
+  priority: 'low' | 'medium' | 'high';
+  status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+  estimated_duration: number;
+  actual_duration?: number;
+  scheduled_date: string;
+  scheduled_time?: string;
+  due_date?: string;
+  xp_reward: number;
+  goal_id?: string;
+  accountability_type?: 'self' | 'ai' | 'partner' | 'team';
+  completed_at?: string;
+}
 
+type ViewMode = 'day' | 'week' | 'month' | 'year' | 'schedule' | 'list';
+
+const categoryIcons = {
+  work: Briefcase,
+  health: Heart,
+  learning: BookOpen,
+  personal: Home,
+  fitness: Dumbbell,
+  finance: DollarSign,
+  creative: Palette,
+  social: Users,
+  entertainment: Music,
+  travel: Plane,
+  technology: Brain,
+  other: Target
+};
+
+const categoryColors = {
+  work: 'bg-blue-500',
+  health: 'bg-green-500',
+  learning: 'bg-purple-500',
+  personal: 'bg-yellow-500',
+  fitness: 'bg-red-500',
+  finance: 'bg-emerald-500',
+  creative: 'bg-pink-500',
+  social: 'bg-indigo-500',
+  entertainment: 'bg-orange-500',
+  travel: 'bg-cyan-500',
+  technology: 'bg-violet-500',
+  other: 'bg-gray-500'
+};
+
+const priorityColors = {
+  low: 'border-l-green-400',
+  medium: 'border-l-yellow-400',
+  high: 'border-l-red-400'
+};
+
+export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfig }) => {
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [viewMode, setViewMode] = useState<ViewMode>('week');
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [showTaskModal, setShowTaskModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [filterPriority, setFilterPriority] = useState<string>('all');
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [taskToComplete, setTaskToComplete] = useState<Task | null>(null);
+  const [userSettings, setUserSettings] = useState<UserSettings | null>(null);
+
+  // Load user settings on component mount
+  useEffect(() => {
+    const loadSettings = async () => {
+      const settings = await getUserSettings(user.id);
+      setUserSettings(settings);
+    };
+    loadSettings();
+  }, [user.id]);
+
+  // Mock tasks data with accountability types
   const [tasks, setTasks] = useState<Task[]>([
-    { 
-      id: 1, 
-      title: 'Morning Meditation', 
-      time: '07:00', 
-      duration: 20, 
-      category: 'wellness', 
-      completed: true, 
-      date: new Date(),
-      accountability: {
-        type: 'partner',
-        partner: 'Sarah',
-        checkInTime: '07:30',
-        consequences: 'Buy coffee for Sarah',
-        rewards: 'Feel energized all day'
-      }
+    {
+      id: '1',
+      title: 'Morning Workout',
+      description: 'Cardio and strength training session',
+      category: 'fitness',
+      priority: 'high',
+      status: 'pending',
+      estimated_duration: 60,
+      scheduled_date: '2024-01-15',
+      scheduled_time: '07:00',
+      xp_reward: 50,
+      accountability_type: 'ai'
     },
-    { 
-      id: 2, 
-      title: 'Project Review', 
-      time: '09:15', 
-      duration: 60, 
-      category: 'work', 
-      completed: false, 
-      date: new Date(),
-      accountability: {
-        type: 'team',
-        checkInTime: '10:15',
-        consequences: 'Update team on delays',
-        rewards: 'Project milestone bonus'
-      }
+    {
+      id: '2',
+      title: 'Project Review',
+      description: 'Review quarterly project deliverables',
+      category: 'work',
+      priority: 'high',
+      status: 'pending',
+      estimated_duration: 90,
+      scheduled_date: '2024-01-15',
+      scheduled_time: '09:15',
+      xp_reward: 75,
+      accountability_type: 'team'
     },
-    { id: 3, title: 'Quick Call', time: '10:30', duration: 15, category: 'work', completed: false, date: new Date() },
-    { id: 4, title: 'Lunch Break', time: '12:00', duration: 45, category: 'wellness', completed: false, date: new Date() },
-    { 
-      id: 5, 
-      title: 'Gym Workout', 
-      time: '18:00', 
-      duration: 90, 
-      category: 'fitness', 
-      completed: false, 
-      date: new Date(),
-      accountability: {
-        type: 'ai',
-        checkInTime: '19:30',
-        consequences: 'Crushion will send motivational reminders',
-        rewards: 'Unlock new fitness achievement'
-      }
+    {
+      id: '3',
+      title: 'Team Meeting',
+      description: 'Weekly sync with development team',
+      category: 'work',
+      priority: 'medium',
+      status: 'pending',
+      estimated_duration: 60,
+      scheduled_date: '2024-01-15',
+      scheduled_time: '14:00',
+      xp_reward: 40,
+      accountability_type: 'self'
     },
-    { id: 6, title: 'Read 20 pages', time: '21:15', duration: 30, category: 'growth', completed: false, date: new Date() },
-    { id: 7, title: 'Team Meeting', time: '14:00', duration: 45, category: 'work', completed: false, date: new Date(Date.now() + 86400000) },
-    { id: 8, title: 'Yoga Session', time: '08:30', duration: 30, category: 'wellness', completed: false, date: new Date(Date.now() + 86400000) },
+    {
+      id: '4',
+      title: 'Read Chapter 5',
+      description: 'Continue reading "Atomic Habits"',
+      category: 'learning',
+      priority: 'medium',
+      status: 'pending',
+      estimated_duration: 45,
+      scheduled_date: '2024-01-15',
+      scheduled_time: '20:00',
+      xp_reward: 35,
+      accountability_type: 'partner'
+    },
+    {
+      id: '5',
+      title: 'Gym Workout',
+      description: 'Leg day - squats and deadlifts',
+      category: 'fitness',
+      priority: 'high',
+      status: 'completed',
+      estimated_duration: 90,
+      actual_duration: 85,
+      scheduled_date: '2024-01-14',
+      scheduled_time: '18:00',
+      xp_reward: 60,
+      completed_at: '2024-01-14T19:25:00Z',
+      accountability_type: 'ai'
+    },
+    {
+      id: '6',
+      title: 'Meal Prep',
+      description: 'Prepare healthy meals for the week',
+      category: 'health',
+      priority: 'medium',
+      status: 'completed',
+      estimated_duration: 120,
+      actual_duration: 110,
+      scheduled_date: '2024-01-14',
+      scheduled_time: '10:00',
+      xp_reward: 45,
+      completed_at: '2024-01-14T11:50:00Z',
+      accountability_type: 'self'
+    }
   ]);
 
-  const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  const hours = Array.from({ length: 24 }, (_, i) => i);
-
-  // Generate 15-minute intervals for the day
-  const generateTimeSlots = () => {
-    const slots = [];
-    for (let hour = 6; hour <= 23; hour++) {
-      for (let minute = 0; minute < 60; minute += 15) {
-        slots.push({
-          hour,
-          minute,
-          timeString: `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
-        });
-      }
-    }
-    return slots;
-  };
-
-  const timeSlots = generateTimeSlots();
-
-  // Weekly goal progress data
-  const weeklyGoalProgress = {
-    completed: 65,
-    total: 100,
-    goalName: "Launch MVP",
-    daysLeft: 3
-  };
-
-  const getCategoryColor = (category: string) => {
-    const colors = {
-      wellness: 'bg-green-500',
-      work: 'bg-blue-500',
-      fitness: 'bg-red-500',
-      growth: 'bg-purple-500',
-    };
-    return colors[category as keyof typeof colors] || 'bg-gray-500';
-  };
-
-  const getAccountabilityTypeInfo = (type: string) => {
-    switch (type) {
-      case 'ai':
-        return {
-          title: 'AI Accountability',
-          icon: Bot,
-          description: 'Crushion will track your progress and provide intelligent reminders',
-          color: 'bg-blue-500/20 border-blue-500/40 text-blue-400',
-          buttonColor: 'bg-blue-500 hover:bg-blue-600'
-        };
-      case 'partner':
-        return {
-          title: 'Partner Accountability',
-          icon: UserCheck,
-          description: 'A trusted person will help keep you accountable',
-          color: 'bg-green-500/20 border-green-500/40 text-green-400',
-          buttonColor: 'bg-green-500 hover:bg-green-600'
-        };
-      case 'team':
-        return {
-          title: 'Team Accountability',
-          icon: Building,
-          description: 'Your team or colleagues will track this commitment',
-          color: 'bg-purple-500/20 border-purple-500/40 text-purple-400',
-          buttonColor: 'bg-purple-500 hover:bg-purple-600'
-        };
-      case 'public':
-        return {
-          title: 'Public Accountability',
-          icon: Users,
-          description: 'Share your commitment publicly for social accountability',
-          color: 'bg-yellow-500/20 border-yellow-500/40 text-yellow-400',
-          buttonColor: 'bg-yellow-500 hover:bg-yellow-600'
-        };
-      default:
-        return {
-          title: 'Accountability',
-          icon: Users,
-          description: 'Track your commitment',
-          color: 'bg-gray-500/20 border-gray-500/40 text-gray-400',
-          buttonColor: 'bg-gray-500 hover:bg-gray-600'
-        };
-    }
-  };
-
-  // Stable callback for handling title changes
-  const handleTitleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormTitle(e.target.value);
-  }, []);
-
-  // Focus the title input when modal opens
-  useEffect(() => {
-    if (showQuickCreate && titleInputRef.current) {
-      // Small delay to ensure the modal is fully rendered
-      const timer = setTimeout(() => {
-        titleInputRef.current?.focus();
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [showQuickCreate]);
-
-  // Quick Create Functions
-  const openQuickCreate = (date: string, time: string) => {
-    setQuickCreateDate(date);
-    setQuickCreateTime(time);
-    setShowQuickCreate(true);
-    // Reset form
-    setFormTitle('');
-    setFormType('task');
-    setFormDuration(30);
-    setFormCategory('work');
-    setFormDescription('');
-  };
-
-  const closeQuickCreate = () => {
-    setShowQuickCreate(false);
-    setQuickCreateDate('');
-    setQuickCreateTime('');
-    // Reset form
-    setFormTitle('');
-    setFormType('task');
-    setFormDuration(30);
-    setFormCategory('work');
-    setFormDescription('');
-  };
-
-  const handleQuickCreateSubmit = () => {
-    if (!formTitle.trim()) return;
-
-    const newTask: Task = {
-      id: Date.now(),
-      title: formTitle,
-      time: quickCreateTime,
-      duration: formDuration,
-      category: formCategory,
-      completed: false,
-      date: new Date(quickCreateDate)
-    };
-
-    setTasks(prev => [...prev, newTask]);
-    closeQuickCreate();
-  };
-
-  // Drag and Drop Functions
-  const handleDragStart = (e: React.DragEvent, task: Task) => {
-    setDraggedTask(task);
-    e.dataTransfer.effectAllowed = 'move';
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  };
-
-  const handleDrop = (e: React.DragEvent, newTime: string, newDate?: Date) => {
-    e.preventDefault();
-    if (!draggedTask) return;
-
+  const handleTaskComplete = async (taskId: string, xpGained: number) => {
     setTasks(prevTasks => 
       prevTasks.map(task => 
-        task.id === draggedTask.id 
-          ? { 
-              ...task, 
-              time: newTime,
-              date: newDate || task.date
-            }
+        task.id === taskId 
+          ? { ...task, status: 'completed' as const, completed_at: new Date().toISOString() }
           : task
       )
     );
-    setDraggedTask(null);
+    setShowCompletionModal(false);
+    setTaskToComplete(null);
+    
+    // Here you could also update user XP, show celebration, etc.
+    console.log(`Task completed! Gained ${xpGained} XP`);
   };
 
-  // Task Editing Functions
-  const startEditing = (task: Task) => {
-    setEditingTask(task.id);
-    setEditForm({
-      title: task.title,
-      time: task.time,
-      duration: task.duration,
-      category: task.category
-    });
+  const handleTaskCheckboxClick = async (task: Task, event: React.MouseEvent) => {
+    event.stopPropagation();
+    
+    if (task.status === 'completed') {
+      // If task is already completed, you might want to allow unchecking
+      // For now, we'll just return
+      return;
+    }
+
+    // Load user settings if not already loaded
+    let settings = userSettings;
+    if (!settings) {
+      settings = await getUserSettings(user.id);
+      setUserSettings(settings);
+    }
+
+    if (!settings) {
+      // Fallback to simple completion if settings can't be loaded
+      handleTaskComplete(task.id, task.xp_reward);
+      return;
+    }
+
+    // Show appropriate completion modal based on settings
+    setTaskToComplete(task);
+    setShowCompletionModal(true);
   };
 
-  const saveEdit = () => {
-    if (!editingTask) return;
-
-    setTasks(prevTasks =>
-      prevTasks.map(task =>
-        task.id === editingTask
-          ? { ...task, ...editForm }
-          : task
-      )
-    );
-    setEditingTask(null);
-    setEditForm({});
+  const getAccountabilityIcon = (type?: string) => {
+    switch (type) {
+      case 'ai':
+        return <Bot className="w-3 h-3 text-blue-400" />;
+      case 'partner':
+        return <UserCheck className="w-3 h-3 text-green-400" />;
+      case 'team':
+        return <Users className="w-3 h-3 text-purple-400" />;
+      default:
+        return <Shield className="w-3 h-3 text-gray-400" />;
+    }
   };
 
-  const cancelEdit = () => {
-    setEditingTask(null);
-    setEditForm({});
+  const getAccountabilityLabel = (type?: string) => {
+    switch (type) {
+      case 'ai':
+        return 'AI Accountability';
+      case 'partner':
+        return 'Partner Accountability';
+      case 'team':
+        return 'Team Accountability';
+      default:
+        return 'Self Accountability';
+    }
   };
 
-  const deleteTask = (taskId: number) => {
-    setTasks(prevTasks => prevTasks.filter(task => task.id !== taskId));
+  const getAccountabilityColor = (type?: string) => {
+    switch (type) {
+      case 'ai':
+        return 'bg-blue-500';
+      case 'partner':
+        return 'bg-green-500';
+      case 'team':
+        return 'bg-purple-500';
+      default:
+        return 'bg-gray-500';
+    }
   };
 
-  const toggleTaskComplete = (taskId: number) => {
-    setTasks(prevTasks =>
-      prevTasks.map(task =>
-        task.id === taskId
-          ? { ...task, completed: !task.completed }
-          : task
-      )
-    );
+  // Filter tasks based on search and filters
+  const filteredTasks = tasks.filter(task => {
+    const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         task.description?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCategory = filterCategory === 'all' || task.category === filterCategory;
+    const matchesPriority = filterPriority === 'all' || task.priority === filterPriority;
+    
+    return matchesSearch && matchesCategory && matchesPriority;
+  });
+
+  // Get tasks for current view
+  const getTasksForView = () => {
+    const today = new Date();
+    const currentDateStr = currentDate.toISOString().split('T')[0];
+    
+    switch (viewMode) {
+      case 'day':
+        return filteredTasks.filter(task => task.scheduled_date === currentDateStr);
+      case 'week':
+        const weekStart = new Date(currentDate);
+        weekStart.setDate(currentDate.getDate() - currentDate.getDay());
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 6);
+        
+        return filteredTasks.filter(task => {
+          const taskDate = new Date(task.scheduled_date);
+          return taskDate >= weekStart && taskDate <= weekEnd;
+        });
+      case 'month':
+        return filteredTasks.filter(task => {
+          const taskDate = new Date(task.scheduled_date);
+          return taskDate.getMonth() === currentDate.getMonth() && 
+                 taskDate.getFullYear() === currentDate.getFullYear();
+        });
+      case 'year':
+        return filteredTasks.filter(task => {
+          const taskDate = new Date(task.scheduled_date);
+          return taskDate.getFullYear() === currentDate.getFullYear();
+        });
+      default:
+        return filteredTasks;
+    }
   };
 
-  const handleCheckIn = (taskId: number) => {
-    // Simulate check-in action
-    alert('Check-in recorded! Great job staying accountable! 🎉');
-    setShowAccountabilityModal(null);
-  };
+  const viewTasks = getTasksForView();
 
-  const handleEditAccountability = (taskId: number) => {
-    // This would open an accountability editing modal/form
-    alert('Opening accountability editor... (Feature coming soon!)');
-    setShowAccountabilityModal(null);
-  };
-
+  // Navigation functions
   const navigateDate = (direction: 'prev' | 'next') => {
     const newDate = new Date(currentDate);
-    switch (currentView) {
+    
+    switch (viewMode) {
       case 'day':
-        newDate.setDate(newDate.getDate() + (direction === 'next' ? 1 : -1));
+        newDate.setDate(currentDate.getDate() + (direction === 'next' ? 1 : -1));
         break;
       case 'week':
-        newDate.setDate(newDate.getDate() + (direction === 'next' ? 7 : -7));
+        newDate.setDate(currentDate.getDate() + (direction === 'next' ? 7 : -7));
         break;
       case 'month':
-        newDate.setMonth(newDate.getMonth() + (direction === 'next' ? 1 : -1));
+        newDate.setMonth(currentDate.getMonth() + (direction === 'next' ? 1 : -1));
         break;
       case 'year':
-        newDate.setFullYear(newDate.getFullYear() + (direction === 'next' ? 1 : -1));
+        newDate.setFullYear(currentDate.getFullYear() + (direction === 'next' ? 1 : -1));
         break;
     }
+    
     setCurrentDate(newDate);
   };
 
   const getDateRangeText = () => {
-    switch (currentView) {
+    const options: Intl.DateTimeFormatOptions = { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    };
+    
+    switch (viewMode) {
       case 'day':
-        return currentDate.toLocaleDateString('en-US', { 
-          weekday: 'long',
-          month: 'long', 
-          day: 'numeric',
-          year: 'numeric'
-        });
+        return currentDate.toLocaleDateString('en-US', options);
       case 'week':
         const weekStart = new Date(currentDate);
         weekStart.setDate(currentDate.getDate() - currentDate.getDay());
@@ -365,945 +385,237 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
         weekEnd.setDate(weekStart.getDate() + 6);
         return `${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
       case 'month':
-        return currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        return currentDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
       case 'year':
         return currentDate.getFullYear().toString();
-      case 'schedule':
-        return 'Schedule View';
       default:
-        return '';
+        return 'All Tasks';
     }
   };
 
-  // Convert time string to minutes for positioning
-  const timeToMinutes = (timeString: string) => {
-    const [hours, minutes] = timeString.split(':').map(Number);
-    return (hours - 6) * 60 + minutes; // Subtract 6 because we start at 6 AM
-  };
+  // Stats calculations
+  const todayTasks = tasks.filter(task => task.scheduled_date === new Date().toISOString().split('T')[0]);
+  const completedToday = todayTasks.filter(task => task.status === 'completed').length;
+  const totalToday = todayTasks.length;
+  const completionRate = totalToday > 0 ? Math.round((completedToday / totalToday) * 100) : 0;
 
-  // Convert position back to time
-  const positionToTime = (position: number) => {
-    const totalMinutes = Math.round((position / 16) * 15); // 16px per 15-minute slot
-    const hours = Math.floor(totalMinutes / 60) + 6; // Add 6 because we start at 6 AM
-    const minutes = totalMinutes % 60;
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-  };
+  const weeklyXP = tasks
+    .filter(task => task.status === 'completed' && task.completed_at)
+    .filter(task => {
+      const completedDate = new Date(task.completed_at!);
+      const weekStart = new Date();
+      weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+      return completedDate >= weekStart;
+    })
+    .reduce((total, task) => total + task.xp_reward, 0);
 
-  // Ultra micro pie chart component
-  const MicroPieChart = ({ percentage, size = 16 }: { percentage: number; size?: number }) => {
-    const radius = (size - 2) / 2;
-    const circumference = 2 * Math.PI * radius;
-    const strokeDasharray = circumference;
-    const strokeDashoffset = circumference - (percentage / 100) * circumference;
+  const currentStreak = 7; // This would be calculated from actual data
 
+  // Render task card
+  const renderTaskCard = (task: Task, index: number) => {
+    const CategoryIcon = categoryIcons[task.category as keyof typeof categoryIcons] || Target;
+    const isCompleted = task.status === 'completed';
+    
     return (
-      <div className="relative" style={{ width: size, height: size }}>
-        <svg width={size} height={size} className="transform -rotate-90">
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            stroke="rgb(75, 85, 99)"
-            strokeWidth="1"
-            fill="transparent"
-          />
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            stroke="rgb(34, 197, 94)"
-            strokeWidth="1"
-            fill="transparent"
-            strokeDasharray={strokeDasharray}
-            strokeDashoffset={strokeDashoffset}
-            strokeLinecap="round"
-            className="transition-all duration-300"
-          />
-        </svg>
-      </div>
-    );
-  };
-
-  // Enhanced Accountability Modal Component
-  const AccountabilityModal = ({ task }: { task: Task }) => {
-    const typeInfo = getAccountabilityTypeInfo(task.accountability?.type || '');
-    const TypeIcon = typeInfo.icon;
-
-    return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-        <div className="bg-gray-900 rounded-xl border border-gray-800 max-w-md w-full max-h-[80vh] overflow-y-auto">
-          <div className="p-4 border-b border-gray-800">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                <TypeIcon className="w-5 h-5 text-yellow-400" />
-                Accountability for "{task.title}"
-              </h3>
-              <button
-                onClick={() => setShowAccountabilityModal(null)}
-                className="p-1 hover:bg-gray-800 rounded"
-              >
-                <X className="w-5 h-5 text-gray-400" />
-              </button>
-            </div>
-          </div>
-          
-          <div className="p-4 space-y-4">
-            {task.accountability ? (
-              <>
-                <div className={`rounded-lg p-3 border ${typeInfo.color}`}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <TypeIcon className="w-5 h-5" />
-                    <span className="text-white font-medium">{typeInfo.title}</span>
-                  </div>
-                  
-                  {task.accountability.partner && (
-                    <p className="text-gray-300 text-sm mb-2">
-                      <strong>Partner:</strong> {task.accountability.partner}
-                    </p>
-                  )}
-                  
-                  {task.accountability.checkInTime && (
-                    <p className="text-gray-300 text-sm">
-                      <strong>Check-in Time:</strong> {task.accountability.checkInTime}
-                    </p>
-                  )}
-                </div>
-
-                {task.accountability.consequences && (
-                  <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
-                    <h4 className="text-red-400 font-medium mb-1 flex items-center gap-1">
-                      ⚠️ If I don't complete this:
-                    </h4>
-                    <p className="text-gray-300 text-sm">{task.accountability.consequences}</p>
-                  </div>
-                )}
-
-                {task.accountability.rewards && (
-                  <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3">
-                    <h4 className="text-green-400 font-medium mb-1 flex items-center gap-1">
-                      🎉 When I complete this:
-                    </h4>
-                    <p className="text-gray-300 text-sm">{task.accountability.rewards}</p>
-                  </div>
-                )}
-
-                <div className="flex gap-2">
-                  <button 
-                    onClick={() => handleCheckIn(task.id)}
-                    className="flex-1 bg-yellow-400 text-black py-2 px-4 rounded-lg font-medium hover:bg-yellow-300 transition-colors"
-                  >
-                    Check In Now
-                  </button>
-                  <button 
-                    onClick={() => handleEditAccountability(task.id)}
-                    className="flex-1 bg-gray-700 text-white py-2 px-4 rounded-lg font-medium hover:bg-gray-600 transition-colors"
-                  >
-                    Edit Accountability
-                  </button>
-                </div>
-
-                {/* Accountability type specific info */}
-                <div className={`rounded-lg p-3 border ${typeInfo.color}`}>
-                  <h4 className="font-medium mb-1 flex items-center gap-1">
-                    💡 About {typeInfo.title}:
-                  </h4>
-                  <p className="text-gray-300 text-sm">{typeInfo.description}</p>
-                  
-                  {task.accountability.type === 'ai' && (
-                    <p className="text-gray-400 text-xs mt-2">
-                      Crushion uses advanced AI to provide personalized motivation and track your progress patterns.
-                    </p>
-                  )}
-                  
-                  {task.accountability.type === 'partner' && (
-                    <p className="text-gray-400 text-xs mt-2">
-                      Studies show accountability partners increase success rates by up to 95%!
-                    </p>
-                  )}
-                  
-                  {task.accountability.type === 'team' && (
-                    <p className="text-gray-400 text-xs mt-2">
-                      Team accountability creates shared responsibility and collective motivation.
-                    </p>
-                  )}
-                </div>
-              </>
+      <div
+        key={task.id}
+        className={`relative group ${categoryColors[task.category as keyof typeof categoryColors]} rounded-lg text-xs text-white cursor-move transition-all hover:scale-[1.02] hover:shadow-lg z-10`}
+        style={{
+          top: `${index * 2}px`,
+          left: '4px',
+          right: '4px',
+          height: `${Math.max(40, Math.min(80, task.estimated_duration))}px`
+        }}
+        onClick={() => {
+          setSelectedTask(task);
+          setShowTaskModal(true);
+        }}
+      >
+        <div className="p-1 h-full flex flex-col justify-between relative">
+          {/* Task completion checkbox */}
+          <div 
+            className="absolute top-1 right-1 z-20"
+            onClick={(e) => handleTaskCheckboxClick(task, e)}
+          >
+            {isCompleted ? (
+              <CheckCircle2 className="w-4 h-4 text-green-300 hover:text-green-100 transition-colors" />
             ) : (
-              <div className="text-center py-6">
-                <Users className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                <h4 className="text-white font-medium mb-2">No Accountability Set</h4>
-                <p className="text-gray-400 text-sm mb-4">
-                  Add accountability to increase your chances of completing this task by up to 95%!
-                </p>
-                
-                {/* Accountability type options */}
-                <div className="grid grid-cols-2 gap-2 mb-4">
-                  <button className="bg-gray-800 hover:bg-gray-700 p-3 rounded-lg text-left transition-colors">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Bot className="w-4 h-4 text-blue-400" />
-                      <span className="text-white text-sm font-medium">AI</span>
-                    </div>
-                    <p className="text-xs text-gray-400">Smart tracking</p>
-                  </button>
-                  
-                  <button className="bg-gray-800 hover:bg-gray-700 p-3 rounded-lg text-left transition-colors">
-                    <div className="flex items-center gap-2 mb-1">
-                      <UserCheck className="w-4 h-4 text-green-400" />
-                      <span className="text-white text-sm font-medium">Partner</span>
-                    </div>
-                    <p className="text-xs text-gray-400">Personal support</p>
-                  </button>
-                  
-                  <button className="bg-gray-800 hover:bg-gray-700 p-3 rounded-lg text-left transition-colors">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Building className="w-4 h-4 text-purple-400" />
-                      <span className="text-white text-sm font-medium">Team</span>
-                    </div>
-                    <p className="text-xs text-gray-400">Group commitment</p>
-                  </button>
-                  
-                  <button className="bg-gray-800 hover:bg-gray-700 p-3 rounded-lg text-left transition-colors">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Users className="w-4 h-4 text-yellow-400" />
-                      <span className="text-white text-sm font-medium">Public</span>
-                    </div>
-                    <p className="text-xs text-gray-400">Social pressure</p>
-                  </button>
-                </div>
-                
-                <button className="bg-yellow-400 text-black py-2 px-4 rounded-lg font-medium hover:bg-yellow-300 transition-colors">
-                  Set Up Accountability
-                </button>
-              </div>
+              <Circle className="w-4 h-4 text-white/70 hover:text-white transition-colors" />
             )}
           </div>
-        </div>
-      </div>
-    );
-  };
 
-  // Quick Create Modal Component
-  const QuickCreateModal = () => (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 rounded-xl border border-gray-800 max-w-md w-full">
-        <div className="p-4 border-b border-gray-800">
+          <div className={`${isCompleted ? 'opacity-60' : ''}`}>
+            <div className="flex items-center gap-1 mb-1">
+              <CategoryIcon className="w-3 h-3 flex-shrink-0" />
+              <span className="font-medium truncate pr-5">{task.title}</span>
+            </div>
+            
+            <div className="flex items-center gap-1 text-white/80">
+              <Clock className="w-2.5 h-2.5" />
+              <span>{task.scheduled_time}</span>
+              <span>•</span>
+              <span>{task.estimated_duration}min</span>
+            </div>
+          </div>
+
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-white">Quick Create</h3>
-            <button
-              onClick={closeQuickCreate}
-              className="p-1 hover:bg-gray-800 rounded"
-            >
-              <X className="w-5 h-5 text-gray-400" />
-            </button>
-          </div>
-          <p className="text-sm text-gray-400 mt-1">
-            {new Date(quickCreateDate).toLocaleDateString()} at {quickCreateTime}
-          </p>
-        </div>
-        
-        <div className="p-4 space-y-4">
-          {/* Type Selection */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Type</label>
-            <div className="flex bg-gray-800 rounded-lg p-1">
-              {(['task', 'event', 'goal'] as const).map((type) => (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => setFormType(type)}
-                  className={`flex-1 px-3 py-2 rounded-md text-sm font-medium capitalize transition-colors ${
-                    formType === type
-                      ? 'bg-yellow-400 text-black'
-                      : 'text-gray-400 hover:text-white'
-                  }`}
-                >
-                  {type}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Title Input - This is the problematic input */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              {formType === 'task' ? 'Task' : formType === 'event' ? 'Event' : 'Goal'} Title
-            </label>
-            <input
-              ref={titleInputRef}
-              type="text"
-              value={formTitle}
-              onChange={handleTitleChange}
-              placeholder={`Enter ${formType} title...`}
-              className="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 focus:border-yellow-400 focus:outline-none"
-              autoComplete="off"
-              autoFocus
-            />
-          </div>
-
-          {/* Duration */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Duration (min)</label>
-              <input
-                type="number"
-                value={formDuration}
-                onChange={(e) => setFormDuration(parseInt(e.target.value) || 30)}
-                className="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 focus:border-yellow-400 focus:outline-none"
-                min="5"
-                max="480"
-              />
+            <div className="flex items-center gap-1">
+              {getAccountabilityIcon(task.accountability_type)}
+              <span className="text-[10px] opacity-80">
+                {task.accountability_type === 'ai' ? 'AI' : 
+                 task.accountability_type === 'partner' ? 'Partner' :
+                 task.accountability_type === 'team' ? 'Team' : 'Self'}
+              </span>
             </div>
             
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Category</label>
-              <select
-                value={formCategory}
-                onChange={(e) => setFormCategory(e.target.value)}
-                className="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 focus:border-yellow-400 focus:outline-none"
-              >
-                <option value="work">Work</option>
-                <option value="wellness">Wellness</option>
-                <option value="fitness">Fitness</option>
-                <option value="growth">Growth</option>
-              </select>
+            <div className="flex items-center gap-1">
+              <Zap className="w-2.5 h-2.5 text-yellow-300" />
+              <span className="text-[10px]">{task.xp_reward}</span>
             </div>
           </div>
 
-          {/* Description */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Description (optional)</label>
-            <textarea
-              value={formDescription}
-              onChange={(e) => setFormDescription(e.target.value)}
-              placeholder="Add details..."
-              className="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 focus:border-yellow-400 focus:outline-none resize-none"
-              rows={2}
-            />
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex gap-3 pt-2">
-            <button
-              onClick={closeQuickCreate}
-              className="flex-1 bg-gray-700 text-white py-2 px-4 rounded-lg font-medium hover:bg-gray-600 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleQuickCreateSubmit}
-              disabled={!formTitle.trim()}
-              className="flex-1 bg-yellow-400 text-black py-2 px-4 rounded-lg font-medium hover:bg-yellow-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Create {formType}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderDayView = () => (
-    <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
-      {/* Header */}
-      <div className="grid grid-cols-[60px_1fr] border-b border-gray-800">
-        <div className="p-2 text-xs text-gray-400 border-r border-gray-800 text-center">Time</div>
-        <div className="p-3 text-center">
-          <div className="text-sm text-gray-400">{weekDays[currentDate.getDay()]}</div>
-          <div className="text-lg font-semibold text-yellow-400 mt-1">
-            {currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-          </div>
-        </div>
-      </div>
-
-      {/* Time slots with tasks */}
-      <div className="max-h-[600px] overflow-y-auto relative">
-        <div className="grid grid-cols-[60px_1fr]">
-          {/* Time column */}
-          <div className="border-r border-gray-800">
-            {timeSlots.map((slot, index) => (
-              <div
-                key={`${slot.hour}-${slot.minute}`}
-                className={`h-4 flex items-center justify-center text-xs text-gray-500 border-b border-gray-800/50 ${
-                  slot.minute === 0 ? 'border-gray-700 font-medium text-gray-400' : ''
-                }`}
-              >
-                {slot.minute === 0 ? slot.timeString : ''}
-              </div>
-            ))}
-          </div>
-
-          {/* Tasks column */}
-          <div className="relative">
-            {/* Background grid with drop zones */}
-            {timeSlots.map((slot, index) => (
-              <div
-                key={`bg-${slot.hour}-${slot.minute}`}
-                className={`h-4 border-b border-gray-800/30 hover:bg-gray-800/20 transition-colors cursor-pointer ${
-                  slot.minute === 0 ? 'border-gray-700' : ''
-                }`}
-                onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, slot.timeString, currentDate)}
-                onClick={() => openQuickCreate(currentDate.toISOString().split('T')[0], slot.timeString)}
-                title="Click to create new task/event/goal"
-              />
-            ))}
-
-            {/* Tasks positioned absolutely */}
-            {tasks
-              .filter(task => task.date.toDateString() === currentDate.toDateString())
-              .map(task => {
-                const startMinutes = timeToMinutes(task.time);
-                const heightInPixels = (task.duration / 15) * 16; // 16px per 15-minute slot
-                const topPosition = (startMinutes / 15) * 16; // 16px per 15-minute slot
-                const isEditing = editingTask === task.id;
-                const accountabilityInfo = task.accountability ? getAccountabilityTypeInfo(task.accountability.type) : null;
-
-                if (isEditing) {
-                  return (
-                    <div
-                      key={task.id}
-                      className="absolute left-1 right-1 bg-gray-800 border-2 border-yellow-400 rounded-lg p-2 z-20"
-                      style={{ 
-                        top: `${topPosition}px`,
-                        minHeight: '120px'
-                      }}
-                    >
-                      <div className="space-y-2">
-                        <input
-                          type="text"
-                          value={editForm.title || ''}
-                          onChange={(e) => setEditForm({...editForm, title: e.target.value})}
-                          className="w-full bg-gray-700 text-white text-sm px-2 py-1 rounded border border-gray-600 focus:border-yellow-400 focus:outline-none"
-                          placeholder="Task title"
-                        />
-                        <div className="flex gap-2">
-                          <input
-                            type="time"
-                            value={editForm.time || ''}
-                            onChange={(e) => setEditForm({...editForm, time: e.target.value})}
-                            className="bg-gray-700 text-white text-xs px-2 py-1 rounded border border-gray-600 focus:border-yellow-400 focus:outline-none"
-                          />
-                          <input
-                            type="number"
-                            value={editForm.duration || ''}
-                            onChange={(e) => setEditForm({...editForm, duration: parseInt(e.target.value)})}
-                            className="w-16 bg-gray-700 text-white text-xs px-2 py-1 rounded border border-gray-600 focus:border-yellow-400 focus:outline-none"
-                            placeholder="min"
-                          />
-                          <select
-                            value={editForm.category || ''}
-                            onChange={(e) => setEditForm({...editForm, category: e.target.value})}
-                            className="bg-gray-700 text-white text-xs px-2 py-1 rounded border border-gray-600 focus:border-yellow-400 focus:outline-none"
-                          >
-                            <option value="work">Work</option>
-                            <option value="wellness">Wellness</option>
-                            <option value="fitness">Fitness</option>
-                            <option value="growth">Growth</option>
-                          </select>
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={saveEdit}
-                            className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs px-2 py-1 rounded flex items-center justify-center gap-1"
-                          >
-                            <Save className="w-3 h-3" />
-                            Save
-                          </button>
-                          <button
-                            onClick={cancelEdit}
-                            className="flex-1 bg-gray-600 hover:bg-gray-700 text-white text-xs px-2 py-1 rounded flex items-center justify-center gap-1"
-                          >
-                            <X className="w-3 h-3" />
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div
-                    key={task.id}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, task)}
-                    className={`absolute left-1 right-1 rounded-lg text-xs text-white cursor-move transition-all hover:scale-[1.02] hover:shadow-lg z-10 group ${
-                      task.completed ? 'opacity-60' : ''
-                    } ${getCategoryColor(task.category)} ${
-                      draggedTask?.id === task.id ? 'opacity-50 scale-95' : ''
-                    }`}
-                    style={{ 
-                      top: `${topPosition}px`,
-                      height: `${Math.max(heightInPixels, 32)}px`,
-                      minHeight: '32px'
-                    }}
-                  >
-                    <div className="p-1 h-full flex flex-col justify-between relative">
-                      <div className="flex items-center gap-1">
-                        <div className={`font-medium leading-tight flex-1 ${task.completed ? 'line-through' : ''}`}>
-                          {task.title}
-                        </div>
-                      </div>
-                      
-                      {heightInPixels > 24 && (
-                        <div className="text-xs opacity-75 mt-0.5">
-                          {task.time} • {task.duration}min
-                        </div>
-                      )}
-
-                      {/* Accountability Button - Always visible when accountability is set */}
-                      {task.accountability && accountabilityInfo && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setShowAccountabilityModal(task.id);
-                          }}
-                          className={`mt-1 px-2 py-1 rounded text-xs font-medium text-white transition-all ${accountabilityInfo.buttonColor} flex items-center gap-1 justify-center`}
-                          title={`View ${accountabilityInfo.title}`}
-                        >
-                          <accountabilityInfo.icon className="w-3 h-3" />
-                          {accountabilityInfo.title}
-                        </button>
-                      )}
-                      
-                      {/* Task controls - only visible on hover */}
-                      <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            startEditing(task);
-                          }}
-                          className="w-4 h-4 bg-black/50 hover:bg-black/70 rounded flex items-center justify-center"
-                        >
-                          <Edit3 className="w-2 h-2" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteTask(task.id);
-                          }}
-                          className="w-4 h-4 bg-red-500/70 hover:bg-red-500 rounded flex items-center justify-center"
-                        >
-                          <Trash2 className="w-2 h-2" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
-            }
-
-            {/* Current time indicator */}
-            {(() => {
-              const now = new Date();
-              if (now.toDateString() === currentDate.toDateString()) {
-                const currentMinutes = (now.getHours() - 6) * 60 + now.getMinutes();
-                if (currentMinutes >= 0 && currentMinutes <= 18 * 60) { // 6 AM to 12 AM
-                  const currentPosition = (currentMinutes / 15) * 16;
-                  return (
-                    <div
-                      className="absolute left-0 right-0 z-20"
-                      style={{ top: `${currentPosition}px` }}
-                    >
-                      <div className="flex items-center">
-                        <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                        <div className="flex-1 h-0.5 bg-red-500"></div>
-                      </div>
-                    </div>
-                  );
-                }
-              }
-              return null;
-            })()}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderWeekView = () => (
-    <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
-      <div className="grid grid-cols-8 border-b border-gray-800">
-        <div className="p-3 text-sm text-gray-400 border-r border-gray-800">Time</div>
-        {weekDays.map((day, index) => {
-          const dayDate = new Date(currentDate);
-          dayDate.setDate(currentDate.getDate() - currentDate.getDay() + index);
-          const isToday = dayDate.toDateString() === new Date().toDateString();
-          
-          return (
-            <div key={day} className="p-3 text-center border-r border-gray-800 last:border-r-0">
-              <div className="text-sm text-gray-400">{day}</div>
-              <div className={`text-lg font-semibold mt-1 ${
-                isToday ? 'text-yellow-400' : 'text-white'
-              }`}>
-                {dayDate.getDate()}
-              </div>
+          {isCompleted && (
+            <div className="absolute inset-0 bg-black/20 rounded-lg flex items-center justify-center">
+              <CheckCircle2 className="w-6 h-6 text-green-300" />
             </div>
-          );
-        })}
-      </div>
-      <div className="max-h-96 overflow-y-auto">
-        {hours.filter(hour => hour >= 6 && hour <= 23).map((hour) => (
-          <div key={hour} className="grid grid-cols-8 border-b border-gray-800 last:border-b-0 min-h-[60px]">
-            <div className="p-3 text-sm text-gray-400 border-r border-gray-800 flex items-start">
-              {hour.toString().padStart(2, '0')}:00
-            </div>
-            {weekDays.map((day, dayIndex) => {
-              const dayDate = new Date(currentDate);
-              dayDate.setDate(currentDate.getDate() - currentDate.getDay() + dayIndex);
-              const hourTime = `${hour.toString().padStart(2, '0')}:00`;
-              
-              return (
-                <div 
-                  key={`${day}-${hour}`} 
-                  className="border-r border-gray-800 last:border-r-0 p-2 relative hover:bg-gray-800/20 transition-colors cursor-pointer"
-                  onDragOver={handleDragOver}
-                  onDrop={(e) => handleDrop(e, hourTime, dayDate)}
-                  onClick={() => openQuickCreate(dayDate.toISOString().split('T')[0], hourTime)}
-                  title="Click to create new task/event/goal"
-                >
-                  {tasks
-                    .filter(task => 
-                      parseInt(task.time.split(':')[0]) === hour &&
-                      task.date.toDateString() === dayDate.toDateString()
-                    )
-                    .map(task => {
-                      const accountabilityInfo = task.accountability ? getAccountabilityTypeInfo(task.accountability.type) : null;
-                      
-                      return (
-                        <div
-                          key={task.id}
-                          draggable
-                          onDragStart={(e) => handleDragStart(e, task)}
-                          className={`absolute inset-x-2 top-1 p-2 rounded-lg text-xs text-white cursor-move transition-all hover:scale-105 group ${
-                            task.completed ? 'opacity-50' : ''
-                          } ${getCategoryColor(task.category)}`}
-                          style={{ height: `${Math.min(task.duration, 50)}px` }}
-                        >
-                          <div className="flex items-center gap-1">
-                            <div className={`font-medium flex-1 ${task.completed ? 'line-through' : ''}`}>
-                              {task.title}
-                            </div>
-                          </div>
-                          <div className="text-xs opacity-75">{task.duration}min</div>
-                          
-                          {/* Accountability Button for Week View */}
-                          {task.accountability && accountabilityInfo && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setShowAccountabilityModal(task.id);
-                              }}
-                              className={`mt-1 px-1 py-0.5 rounded text-xs font-medium text-white transition-all ${accountabilityInfo.buttonColor} flex items-center gap-1 justify-center`}
-                            >
-                              <accountabilityInfo.icon className="w-2 h-2" />
-                              {accountabilityInfo.title.split(' ')[0]}
-                            </button>
-                          )}
-                          
-                          <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                startEditing(task);
-                              }}
-                              className="w-4 h-4 bg-black/50 hover:bg-black/70 rounded flex items-center justify-center"
-                            >
-                              <Edit3 className="w-2 h-2" />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })
-                  }
-                </div>
-              );
-            })}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-
-  const renderMonthView = () => {
-    const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-    const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-    const startDate = new Date(firstDay);
-    startDate.setDate(startDate.getDate() - firstDay.getDay());
-    
-    const days = [];
-    const currentDateObj = new Date(startDate);
-    
-    for (let i = 0; i < 42; i++) {
-      days.push(new Date(currentDateObj));
-      currentDateObj.setDate(currentDateObj.getDate() + 1);
-    }
-
-    return (
-      <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
-        <div className="grid grid-cols-7 border-b border-gray-800">
-          {weekDays.map(day => (
-            <div key={day} className="p-3 text-center text-sm text-gray-400 border-r border-gray-800 last:border-r-0">
-              {day}
-            </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-7">
-          {days.map((day, index) => {
-            const isCurrentMonth = day.getMonth() === currentDate.getMonth();
-            const isToday = day.toDateString() === new Date().toDateString();
-            const dayTasks = tasks.filter(task => task.date.toDateString() === day.toDateString());
-            
-            return (
-              <div
-                key={index}
-                className={`min-h-[80px] p-2 border-r border-b border-gray-800 last:border-r-0 hover:bg-gray-800/20 transition-colors cursor-pointer ${
-                  !isCurrentMonth ? 'bg-gray-800/50' : ''
-                }`}
-                onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, '09:00', day)}
-                onClick={() => openQuickCreate(day.toISOString().split('T')[0], '09:00')}
-                title="Click to create new task/event/goal"
-              >
-                <div className={`text-sm font-medium mb-1 ${
-                  isToday ? 'text-yellow-400' : isCurrentMonth ? 'text-white' : 'text-gray-500'
-                }`}>
-                  {day.getDate()}
-                </div>
-                <div className="space-y-1">
-                  {dayTasks.slice(0, 2).map(task => {
-                    const accountabilityInfo = task.accountability ? getAccountabilityTypeInfo(task.accountability.type) : null;
-                    
-                    return (
-                      <div
-                        key={task.id}
-                        draggable
-                        onDragStart={(e) => handleDragStart(e, task)}
-                        className={`text-xs p-1 rounded cursor-move hover:scale-105 transition-transform ${getCategoryColor(task.category)} text-white`}
-                      >
-                        <div className="truncate">{task.title}</div>
-                        {task.accountability && accountabilityInfo && (
-                          <div className="flex items-center gap-1 mt-1">
-                            <accountabilityInfo.icon className="w-2 h-2" />
-                            <span className="text-xs opacity-75">{accountabilityInfo.title.split(' ')[0]}</span>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                  {dayTasks.length > 2 && (
-                    <div className="text-xs text-gray-400">+{dayTasks.length - 2} more</div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+          )}
         </div>
       </div>
     );
   };
 
-  const renderYearView = () => {
-    const months = Array.from({ length: 12 }, (_, i) => i);
-    
-    return (
-      <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
-        <div className="grid grid-cols-3 md:grid-cols-4 gap-4">
-          {months.map(monthIndex => {
-            const monthDate = new Date(currentDate.getFullYear(), monthIndex, 1);
-            const monthTasks = tasks.filter(task => 
-              task.date.getMonth() === monthIndex && 
-              task.date.getFullYear() === currentDate.getFullYear()
-            );
-            
-            return (
-              <div
-                key={monthIndex}
-                className="bg-gray-800 rounded-lg p-3 hover:bg-gray-700 transition-colors cursor-pointer"
-                onClick={() => {
-                  setCurrentDate(monthDate);
-                  setCurrentView('month');
-                }}
-              >
-                <h3 className="text-white font-medium mb-2">{monthNames[monthIndex]}</h3>
-                <div className="text-sm text-gray-400">
-                  {monthTasks.length} tasks
-                </div>
-                <div className="mt-2 space-y-1">
-                  {monthTasks.slice(0, 3).map(task => {
-                    const accountabilityInfo = task.accountability ? getAccountabilityTypeInfo(task.accountability.type) : null;
-                    
-                    return (
-                      <div key={task.id} className="text-xs text-gray-300 truncate flex items-center gap-1">
-                        <span className="flex-1">{task.title}</span>
-                        {task.accountability && accountabilityInfo && (
-                          <accountabilityInfo.icon className="w-2 h-2 opacity-75" />
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
-
-  const renderScheduleView = () => (
-    <div className="bg-gray-900 rounded-xl border border-gray-800">
-      <div className="p-4 border-b border-gray-800">
-        <h3 className="text-lg font-semibold text-white">Upcoming Tasks</h3>
-      </div>
-      <div className="divide-y divide-gray-800">
-        {tasks
-          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-          .map(task => {
-            const accountabilityInfo = task.accountability ? getAccountabilityTypeInfo(task.accountability.type) : null;
-            
-            return (
-              <div key={task.id} className="p-4 hover:bg-gray-800/50 transition-colors group">
-                <div className="flex items-center gap-4">
-                  <div className={`w-3 h-3 rounded-full ${getCategoryColor(task.category)}`}></div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <h4 className={`font-medium text-white ${task.completed ? 'line-through opacity-50' : ''}`}>
-                        {task.title}
-                      </h4>
-                    </div>
-                    <div className="flex items-center gap-4 text-sm text-gray-400 mt-1">
-                      <span>{task.date.toLocaleDateString()}</span>
-                      <span>{task.time}</span>
-                      <span>{task.duration} min</span>
-                      <span className="capitalize">{task.category}</span>
-                    </div>
-                    
-                    {/* Accountability Button in Schedule View */}
-                    {task.accountability && accountabilityInfo && (
-                      <button
-                        onClick={() => setShowAccountabilityModal(task.id)}
-                        className={`mt-2 px-3 py-1 rounded text-xs font-medium text-white transition-all ${accountabilityInfo.buttonColor} flex items-center gap-1`}
-                      >
-                        <accountabilityInfo.icon className="w-3 h-3" />
-                        {accountabilityInfo.title}
-                      </button>
-                    )}
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => startEditing(task)}
-                      className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-700 rounded transition-all"
-                    >
-                      <Edit3 className="w-4 h-4 text-gray-400" />
-                    </button>
-                    <button
-                      onClick={() => deleteTask(task.id)}
-                      className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-700 rounded transition-all"
-                    >
-                      <Trash2 className="w-4 h-4 text-red-400" />
-                    </button>
-                    <input
-                      type="checkbox"
-                      checked={task.completed}
-                      onChange={() => toggleTaskComplete(task.id)}
-                      className="w-5 h-5 rounded border-gray-600 text-yellow-400 focus:ring-yellow-400"
-                    />
-                  </div>
-                </div>
-              </div>
-            );
-          })
-        }
-      </div>
-    </div>
-  );
-
-  const renderCalendarView = () => {
-    switch (currentView) {
-      case 'day':
-        return renderDayView();
-      case 'week':
-        return renderWeekView();
-      case 'month':
-        return renderMonthView();
-      case 'year':
-        return renderYearView();
-      case 'schedule':
-        return renderScheduleView();
-      default:
-        return renderWeekView();
+  // Generate time slots for schedule view
+  const generateTimeSlots = () => {
+    const slots = [];
+    for (let hour = 6; hour < 24; hour++) {
+      slots.push({
+        time: `${hour.toString().padStart(2, '0')}:00`,
+        label: `${hour === 12 ? 12 : hour > 12 ? hour - 12 : hour}${hour >= 12 ? 'PM' : 'AM'}`
+      });
     }
+    return slots;
   };
+
+  const timeSlots = generateTimeSlots();
 
   return (
     <div className="p-4 md:p-6 pb-20 md:pb-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">
-            Good morning, Goal Crusher! 🌟
-          </h1>
-          <p className="text-gray-400">Ready to make today legendary?</p>
+          <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Dashboard</h1>
+          <p className="text-gray-400">Manage your goals and track progress</p>
         </div>
         
         <button
           onClick={() => onNavigate('goal-wizard')}
           className="bg-yellow-400 text-black px-4 md:px-6 py-2 md:py-3 rounded-xl font-semibold hover:bg-yellow-300 transition-colors flex items-center gap-2 w-fit"
         >
-          <Plus className="w-4 md:w-5 h-4 md:h-5" />
-          <span className="text-sm md:text-base">Add Goal</span>
+          <Plus className="w-4 h-4 md:w-5 md:h-5" />
+          <span className="text-sm md:text-base">New Goal</span>
         </button>
       </div>
 
-      {/* Ultra Micro Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4 mb-6">
-        <div className="bg-gray-900 rounded-lg p-2 md:p-3 border border-gray-800">
-          <div className="flex items-center gap-1 md:gap-2">
-            <Flame className="w-3 md:w-4 h-3 md:h-4 text-orange-500" />
-            <span className="text-xs text-gray-400">Streak</span>
+      {/* Quick Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
+        <div className="bg-gray-900 rounded-xl p-3 md:p-4 border border-gray-800">
+          <div className="flex items-center gap-2 mb-2">
+            <Target className="w-4 md:w-5 h-4 md:h-5 text-green-500" />
+            <span className="text-xs md:text-sm text-gray-400">Today</span>
           </div>
-          <p className="text-lg md:text-xl font-bold text-white">47</p>
-          <p className="text-xs text-gray-500">days</p>
+          <p className="text-xl md:text-2xl font-bold text-white">{completedToday}/{totalToday}</p>
+          <p className="text-xs text-green-400">{completionRate}% complete</p>
         </div>
         
-        <div className="bg-gray-900 rounded-lg p-2 md:p-3 border border-gray-800">
-          <div className="flex items-center gap-1 md:gap-2">
-            <Zap className="w-3 md:w-4 h-3 md:h-4 text-yellow-400" />
-            <span className="text-xs text-gray-400">XP Today</span>
+        <div className="bg-gray-900 rounded-xl p-3 md:p-4 border border-gray-800">
+          <div className="flex items-center gap-2 mb-2">
+            <Zap className="w-4 md:w-5 h-4 md:h-5 text-yellow-400" />
+            <span className="text-xs md:text-sm text-gray-400">Weekly XP</span>
           </div>
-          <p className="text-lg md:text-xl font-bold text-white">340</p>
-          <p className="text-xs text-gray-500">+12 from yesterday</p>
+          <p className="text-xl md:text-2xl font-bold text-white">{weeklyXP}</p>
+          <p className="text-xs text-yellow-400">+{weeklyXP > 0 ? Math.round(weeklyXP * 0.1) : 0} from last week</p>
         </div>
         
-        <div className="bg-gray-900 rounded-lg p-2 md:p-3 border border-gray-800">
-          <div className="flex items-center gap-1 md:gap-2">
-            <Calendar className="w-3 md:w-4 h-3 md:h-4 text-blue-500" />
-            <span className="text-xs text-gray-400">Completed</span>
+        <div className="bg-gray-900 rounded-xl p-3 md:p-4 border border-gray-800">
+          <div className="flex items-center gap-2 mb-2">
+            <Flame className="w-4 md:w-5 h-4 md:h-5 text-orange-500" />
+            <span className="text-xs md:text-sm text-gray-400">Streak</span>
           </div>
-          <p className="text-lg md:text-xl font-bold text-white">3/8</p>
-          <p className="text-xs text-gray-500">tasks today</p>
+          <p className="text-xl md:text-2xl font-bold text-white">{currentStreak}</p>
+          <p className="text-xs text-orange-400">days</p>
         </div>
         
-        <div className="bg-gray-900 rounded-lg p-2 md:p-3 border border-gray-800">
-          <div className="flex items-center gap-1 md:gap-2">
-            <Target className="w-3 md:w-4 h-3 md:h-4 text-green-500" />
-            <span className="text-xs text-gray-400">Weekly Goal</span>
+        <div className="bg-gray-900 rounded-xl p-3 md:p-4 border border-gray-800">
+          <div className="flex items-center gap-2 mb-2">
+            <Trophy className="w-4 md:w-5 h-4 md:h-5 text-purple-500" />
+            <span className="text-xs md:text-sm text-gray-400">Level</span>
           </div>
-          <div className="flex items-center gap-1 md:gap-2">
-            <MicroPieChart percentage={weeklyGoalProgress.completed} size={12} />
-            <div>
-              <p className="text-sm md:text-base font-bold text-white">{weeklyGoalProgress.completed}%</p>
-              <p className="text-xs text-gray-500">{weeklyGoalProgress.daysLeft} days left</p>
-            </div>
-          </div>
+          <p className="text-xl md:text-2xl font-bold text-white">{user.level}</p>
+          <p className="text-xs text-purple-400">Goal Crusher</p>
         </div>
       </div>
 
-      {/* Calendar Controls */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
-        <div className="flex items-center gap-2 md:gap-4">
+      {/* View Controls */}
+      <div className="flex flex-col md:flex-row gap-4 mb-6">
+        {/* View Mode Selector */}
+        <div className="flex bg-gray-800 rounded-lg p-1 overflow-x-auto">
+          {(['day', 'week', 'month', 'year', 'schedule', 'list'] as ViewMode[]).map((mode) => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              className={`px-3 md:px-4 py-2 rounded-md text-sm font-medium capitalize transition-colors whitespace-nowrap ${
+                viewMode === mode
+                  ? 'bg-yellow-400 text-black'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              {mode}
+            </button>
+          ))}
+        </div>
+
+        {/* Search and Filters */}
+        <div className="flex gap-2 flex-1">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search tasks..."
+              className="w-full bg-gray-800 text-white pl-10 pr-4 py-2 rounded-lg border border-gray-700 focus:border-yellow-400 focus:outline-none"
+            />
+          </div>
+          
+          <select
+            value={filterCategory}
+            onChange={(e) => setFilterCategory(e.target.value)}
+            className="bg-gray-800 text-white px-3 py-2 rounded-lg border border-gray-700 focus:border-yellow-400 focus:outline-none"
+          >
+            <option value="all">All Categories</option>
+            {Object.keys(categoryIcons).map(category => (
+              <option key={category} value={category} className="capitalize">
+                {category}
+              </option>
+            ))}
+          </select>
+          
+          <select
+            value={filterPriority}
+            onChange={(e) => setFilterPriority(e.target.value)}
+            className="bg-gray-800 text-white px-3 py-2 rounded-lg border border-gray-700 focus:border-yellow-400 focus:outline-none"
+          >
+            <option value="all">All Priorities</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Date Navigation */}
+      {viewMode !== 'list' && (
+        <div className="flex items-center justify-between mb-6">
           <button
             onClick={() => navigateDate('prev')}
             className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
@@ -1311,7 +623,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
             <ChevronLeft className="w-5 h-5 text-gray-400" />
           </button>
           
-          <h2 className="text-lg md:text-xl font-semibold text-white min-w-0 flex-1 md:min-w-[200px]">
+          <h2 className="text-lg md:text-xl font-semibold text-white text-center">
             {getDateRangeText()}
           </h2>
           
@@ -1322,53 +634,228 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
             <ChevronRight className="w-5 h-5 text-gray-400" />
           </button>
         </div>
+      )}
 
-        <div className="flex bg-gray-800 rounded-lg p-1 overflow-x-auto">
-          {(['day', 'week', 'month', 'year', 'schedule'] as const).map((view) => (
-            <button
-              key={view}
-              onClick={() => setCurrentView(view)}
-              className={`px-2 md:px-3 py-1 md:py-2 rounded-md text-xs md:text-sm capitalize transition-colors whitespace-nowrap ${
-                currentView === view
-                  ? 'bg-yellow-400 text-black font-semibold'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              {view}
-            </button>
-          ))}
-        </div>
+      {/* Main Content */}
+      <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
+        {viewMode === 'schedule' ? (
+          /* Schedule View */
+          <div className="max-h-[600px] overflow-y-auto relative">
+            <div className="grid grid-cols-[60px_1fr]">
+              {/* Time labels */}
+              <div className="bg-gray-800 border-r border-gray-700">
+                {timeSlots.map((slot) => (
+                  <div key={slot.time} className="h-16 flex items-center justify-center text-xs text-gray-400 border-b border-gray-700">
+                    {slot.label}
+                  </div>
+                ))}
+              </div>
+              
+              {/* Tasks */}
+              <div className="relative">
+                {timeSlots.map((slot) => (
+                  <div key={slot.time} className="h-16 border-b border-gray-700 relative">
+                    {/* Render tasks for this time slot */}
+                    {viewTasks
+                      .filter(task => task.scheduled_time === slot.time)
+                      .map((task, index) => renderTaskCard(task, index))
+                    }
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : viewMode === 'list' ? (
+          /* List View */
+          <div className="divide-y divide-gray-800">
+            {viewTasks.length === 0 ? (
+              <div className="p-8 text-center">
+                <Calendar className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-400 mb-2">No tasks found</h3>
+                <p className="text-gray-500">Try adjusting your filters or create a new task.</p>
+              </div>
+            ) : (
+              viewTasks.map((task) => {
+                const CategoryIcon = categoryIcons[task.category as keyof typeof categoryIcons] || Target;
+                const isCompleted = task.status === 'completed';
+                
+                return (
+                  <div
+                    key={task.id}
+                    className={`p-4 hover:bg-gray-800 transition-colors cursor-pointer ${isCompleted ? 'opacity-60' : ''}`}
+                    onClick={() => {
+                      setSelectedTask(task);
+                      setShowTaskModal(true);
+                    }}
+                  >
+                    <div className="flex items-center gap-4">
+                      {/* Completion checkbox */}
+                      <div 
+                        className="flex-shrink-0"
+                        onClick={(e) => handleTaskCheckboxClick(task, e)}
+                      >
+                        {isCompleted ? (
+                          <CheckCircle2 className="w-5 h-5 text-green-400 hover:text-green-300 transition-colors" />
+                        ) : (
+                          <Circle className="w-5 h-5 text-gray-400 hover:text-white transition-colors" />
+                        )}
+                      </div>
+
+                      {/* Category icon */}
+                      <div className={`w-10 h-10 rounded-lg ${categoryColors[task.category as keyof typeof categoryColors]} flex items-center justify-center flex-shrink-0`}>
+                        <CategoryIcon className="w-5 h-5 text-white" />
+                      </div>
+                      
+                      {/* Task details */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className={`font-medium text-white ${isCompleted ? 'line-through' : ''}`}>
+                            {task.title}
+                          </h3>
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${
+                            task.priority === 'high' ? 'bg-red-500/20 text-red-400' :
+                            task.priority === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
+                            'bg-green-500/20 text-green-400'
+                          }`}>
+                            {task.priority}
+                          </span>
+                        </div>
+                        
+                        {task.description && (
+                          <p className="text-gray-400 text-sm mb-2 truncate">{task.description}</p>
+                        )}
+                        
+                        <div className="flex items-center gap-4 text-sm text-gray-400">
+                          <div className="flex items-center gap-1">
+                            <Clock className="w-4 h-4" />
+                            <span>{task.scheduled_time} • {task.estimated_duration}min</span>
+                          </div>
+                          
+                          <div className="flex items-center gap-1">
+                            {getAccountabilityIcon(task.accountability_type)}
+                            <span>{getAccountabilityLabel(task.accountability_type)}</span>
+                          </div>
+                          
+                          <div className="flex items-center gap-1">
+                            <Zap className="w-4 h-4 text-yellow-400" />
+                            <span>{task.xp_reward} XP</span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Actions */}
+                      <div className="flex items-center gap-2">
+                        <button className="p-2 hover:bg-gray-700 rounded-lg transition-colors">
+                          <MoreHorizontal className="w-4 h-4 text-gray-400" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        ) : (
+          /* Calendar Grid Views */
+          <div className="p-4">
+            <div className="grid gap-4">
+              {viewTasks.length === 0 ? (
+                <div className="text-center py-8">
+                  <Calendar className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-400 mb-2">No tasks scheduled</h3>
+                  <p className="text-gray-500">Create your first goal to get started!</p>
+                </div>
+              ) : (
+                viewTasks.map((task) => {
+                  const CategoryIcon = categoryIcons[task.category as keyof typeof categoryIcons] || Target;
+                  const isCompleted = task.status === 'completed';
+                  
+                  return (
+                    <div
+                      key={task.id}
+                      className={`p-4 bg-gray-800 rounded-lg border-l-4 ${priorityColors[task.priority]} hover:bg-gray-750 transition-colors cursor-pointer ${isCompleted ? 'opacity-60' : ''}`}
+                      onClick={() => {
+                        setSelectedTask(task);
+                        setShowTaskModal(true);
+                      }}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-3">
+                          {/* Completion checkbox */}
+                          <div 
+                            className="flex-shrink-0"
+                            onClick={(e) => handleTaskCheckboxClick(task, e)}
+                          >
+                            {isCompleted ? (
+                              <CheckCircle2 className="w-5 h-5 text-green-400 hover:text-green-300 transition-colors" />
+                            ) : (
+                              <Circle className="w-5 h-5 text-gray-400 hover:text-white transition-colors" />
+                            )}
+                          </div>
+
+                          <div className={`w-8 h-8 rounded-lg ${categoryColors[task.category as keyof typeof categoryColors]} flex items-center justify-center`}>
+                            <CategoryIcon className="w-4 h-4 text-white" />
+                          </div>
+                          <div>
+                            <h3 className={`font-medium text-white ${isCompleted ? 'line-through' : ''}`}>
+                              {task.title}
+                            </h3>
+                            <div className="flex items-center gap-2 text-sm text-gray-400">
+                              <Clock className="w-3 h-3" />
+                              <span>{task.scheduled_time}</span>
+                              <span>•</span>
+                              <span>{task.estimated_duration}min</span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <div className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${getAccountabilityColor(task.accountability_type)}`}>
+                            {getAccountabilityIcon(task.accountability_type)}
+                            <span className="hidden md:inline">
+                              {task.accountability_type === 'ai' ? 'AI Accountability' : 
+                               task.accountability_type === 'partner' ? 'Partner Accountability' :
+                               task.accountability_type === 'team' ? 'Team Accountability' : 'Self Accountability'}
+                            </span>
+                            <span className="md:hidden">
+                              {task.accountability_type === 'ai' ? 'AI' : 
+                               task.accountability_type === 'partner' ? 'Partner' :
+                               task.accountability_type === 'team' ? 'Team' : 'Self'}
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center gap-1 text-yellow-400">
+                            <Zap className="w-4 h-4" />
+                            <span className="font-medium">{task.xp_reward}</span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {task.description && (
+                        <p className="text-gray-400 text-sm">{task.description}</p>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Dynamic Calendar View */}
-      {renderCalendarView()}
-
-      {/* Quick Create Modal */}
-      {showQuickCreate && <QuickCreateModal />}
-
-      {/* Accountability Modal */}
-      {showAccountabilityModal && (
-        <AccountabilityModal 
-          task={tasks.find(t => t.id === showAccountabilityModal)!} 
+      {/* Task Completion Modal */}
+      {showCompletionModal && taskToComplete && userSettings && (
+        <TaskCompletionModal
+          task={taskToComplete}
+          userSettings={userSettings}
+          isOpen={showCompletionModal}
+          onClose={() => {
+            setShowCompletionModal(false);
+            setTaskToComplete(null);
+          }}
+          onTaskCompleted={handleTaskComplete}
+          userId={user.id}
         />
-      )}
-
-      {/* Drag and Drop Instructions */}
-      {draggedTask && (
-        <div className="fixed bottom-20 md:bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-80 bg-yellow-400 text-black p-3 rounded-lg shadow-lg z-50">
-          <p className="text-sm font-medium">
-            📅 Dragging "{draggedTask.title}" - Drop on any time slot to reschedule!
-          </p>
-        </div>
-      )}
-
-      {/* Quick Create Instructions */}
-      {!showQuickCreate && (
-        <div className="fixed bottom-20 md:bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-80 bg-blue-500/20 border border-blue-500/40 text-blue-400 p-3 rounded-lg shadow-lg z-40">
-          <p className="text-sm font-medium">
-            💡 Click any time slot to quickly create tasks, events, or goals!
-          </p>
-        </div>
       )}
     </div>
   );
