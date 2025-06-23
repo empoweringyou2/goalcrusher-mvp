@@ -526,6 +526,55 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
 
   return (
     <div className="p-4 md:p-6 pb-20 md:pb-6">
+      {/* Stats Banner */}
+      <div className="bg-gray-900 rounded-xl border border-gray-800 p-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center">
+              <Target className="w-5 h-5 text-green-500" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-400">Today</p>
+              <p className="text-xl font-bold text-white">{completedToday}/{totalToday}</p>
+              <p className="text-xs text-green-400">{completionRate}% complete</p>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-yellow-400/20 rounded-lg flex items-center justify-center">
+              <Zap className="w-5 h-5 text-yellow-400" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-400">Weekly XP</p>
+              <p className="text-xl font-bold text-white">{weeklyXP}</p>
+              <p className="text-xs text-yellow-400">+{weeklyXP > 0 ? Math.round(weeklyXP * 0.1) : 0} from last week</p>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-orange-500/20 rounded-lg flex items-center justify-center">
+              <Flame className="w-5 h-5 text-orange-500" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-400">Streak</p>
+              <p className="text-xl font-bold text-white">{currentStreak}</p>
+              <p className="text-xs text-orange-400">days</p>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center">
+              <Trophy className="w-5 h-5 text-purple-500" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-400">Level</p>
+              <p className="text-xl font-bold text-white">{user.level}</p>
+              <p className="text-xs text-purple-400">Goal Crusher</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
         <div>
@@ -543,45 +592,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
           <Plus className="w-4 h-4 md:w-5 md:h-5" />
           <span className="text-sm md:text-base">New Goal</span>
         </button>
-      </div>
-
-      {/* Quick Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
-        <div className="bg-gray-900 rounded-xl p-3 md:p-4 border border-gray-800">
-          <div className="flex items-center gap-2 mb-2">
-            <Target className="w-4 md:w-5 h-4 md:h-5 text-green-500" />
-            <span className="text-xs md:text-sm text-gray-400">Today</span>
-          </div>
-          <p className="text-xl md:text-2xl font-bold text-white">{completedToday}/{totalToday}</p>
-          <p className="text-xs text-green-400">{completionRate}% complete</p>
-        </div>
-        
-        <div className="bg-gray-900 rounded-xl p-3 md:p-4 border border-gray-800">
-          <div className="flex items-center gap-2 mb-2">
-            <Zap className="w-4 md:w-5 h-4 md:h-5 text-yellow-400" />
-            <span className="text-xs md:text-sm text-gray-400">Weekly XP</span>
-          </div>
-          <p className="text-xl md:text-2xl font-bold text-white">{weeklyXP}</p>
-          <p className="text-xs text-yellow-400">+{weeklyXP > 0 ? Math.round(weeklyXP * 0.1) : 0} from last week</p>
-        </div>
-        
-        <div className="bg-gray-900 rounded-xl p-3 md:p-4 border border-gray-800">
-          <div className="flex items-center gap-2 mb-2">
-            <Flame className="w-4 md:w-5 h-4 md:h-5 text-orange-500" />
-            <span className="text-xs md:text-sm text-gray-400">Streak</span>
-          </div>
-          <p className="text-xl md:text-2xl font-bold text-white">{currentStreak}</p>
-          <p className="text-xs text-orange-400">days</p>
-        </div>
-        
-        <div className="bg-gray-900 rounded-xl p-3 md:p-4 border border-gray-800">
-          <div className="flex items-center gap-2 mb-2">
-            <Trophy className="w-4 md:w-5 h-4 md:h-5 text-purple-500" />
-            <span className="text-xs md:text-sm text-gray-400">Level</span>
-          </div>
-          <p className="text-xl md:text-2xl font-bold text-white">{user.level}</p>
-          <p className="text-xs text-purple-400">Goal Crusher</p>
-        </div>
       </div>
 
       {/* View Controls */}
