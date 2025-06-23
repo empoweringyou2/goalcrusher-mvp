@@ -122,17 +122,32 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [taskToComplete, setTaskToComplete] = useState<Task | null>(null);
   const [userSettings, setUserSettings] = useState<UserSettings | null>(null);
+  const [isLoadingSettings, setIsLoadingSettings] = useState(false);
 
   // Load user settings on component mount
   useEffect(() => {
     const loadSettings = async () => {
-      const settings = await getUserSettings(user.id);
-      setUserSettings(settings);
+      setIsLoadingSettings(true);
+      try {
+        const settings = await getUserSettings(user.id);
+        setUserSettings(settings);
+        console.log('Loaded user settings:', settings);
+      } catch (error) {
+        console.error('Failed to load user settings:', error);
+        // Set default settings if loading fails
+        setUserSettings({
+          accountability_type: 'self',
+          completion_method_setting: 'user',
+          default_proof_time_minutes: 10
+        });
+      } finally {
+        setIsLoadingSettings(false);
+      }
     };
     loadSettings();
   }, [user.id]);
 
-  // Mock tasks data with accountability types
+  // Mock tasks data with accountability types that match user settings
   const [tasks, setTasks] = useState<Task[]>([
     {
       id: '1',
@@ -242,18 +257,42 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
       return;
     }
 
+    // Show loading state if settings are still loading
+    if (isLoadingSettings) {
+      console.log('Settings still loading, please wait...');
+      return;
+    }
+
     // Load user settings if not already loaded
     let settings = userSettings;
     if (!settings) {
-      settings = await getUserSettings(user.id);
-      setUserSettings(settings);
+      console.log('Loading user settings for task completion...');
+      setIsLoadingSettings(true);
+      try {
+        settings = await getUserSettings(user.id);
+        setUserSettings(settings);
+      } catch (error) {
+        console.error('Failed to load settings:', error);
+        // Use default settings
+        settings = {
+          accountability_type: 'self',
+          completion_method_setting: 'user',
+          default_proof_time_minutes: 10
+        };
+      } finally {
+        setIsLoadingSettings(false);
+      }
     }
 
     if (!settings) {
+      console.error('Could not load user settings, using fallback completion');
       // Fallback to simple completion if settings can't be loaded
       handleTaskComplete(task.id, task.xp_reward);
       return;
     }
+
+    console.log('Task completion triggered with settings:', settings);
+    console.log('Task accountability type:', task.accountability_type);
 
     // Show appropriate completion modal based on settings
     setTaskToComplete(task);
@@ -434,8 +473,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
         <div className="p-1 h-full flex flex-col justify-between relative">
           {/* Task completion checkbox */}
           <div 
-            className="absolute top-1 right-1 z-20"
+            className="absolute top-1 right-1 z-20 cursor-pointer"
             onClick={(e) => handleTaskCheckboxClick(task, e)}
+            title={isCompleted ? 'Task completed' : 'Mark as complete'}
           >
             {isCompleted ? (
               <CheckCircle2 className="w-4 h-4 text-green-300 hover:text-green-100 transition-colors" />
@@ -505,6 +545,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
         <div>
           <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Dashboard</h1>
           <p className="text-gray-400">Manage your goals and track progress</p>
+          {isLoadingSettings && (
+            <p className="text-yellow-400 text-sm mt-1">Loading accountability settings...</p>
+          )}
         </div>
         
         <button
@@ -554,6 +597,35 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
           <p className="text-xs text-purple-400">Goal Crusher</p>
         </div>
       </div>
+
+      {/* Accountability Settings Status */}
+      {userSettings && (
+        <div className="bg-gray-900 rounded-xl p-4 border border-gray-800 mb-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Shield className="w-5 h-5 text-yellow-400" />
+              <div>
+                <h3 className="text-white font-medium">Current Accountability Settings</h3>
+                <p className="text-gray-400 text-sm">
+                  {userSettings.accountability_type === 'self' ? 'Self-managed' :
+                   userSettings.accountability_type === 'ai' ? 'AI-powered accountability' :
+                   userSettings.accountability_type === 'partner' ? 'Partner accountability' :
+                   'Team accountability'} • 
+                  {userSettings.completion_method_setting === 'user' ? ' Self-confirmation' :
+                   userSettings.completion_method_setting === 'ai' ? ' AI verification' :
+                   ' External verification'}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => onNavigate('settings')}
+              className="text-yellow-400 hover:text-yellow-300 text-sm font-medium transition-colors"
+            >
+              Manage Settings
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* View Controls */}
       <div className="flex flex-col md:flex-row gap-4 mb-6">
@@ -691,8 +763,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
                     <div className="flex items-center gap-4">
                       {/* Completion checkbox */}
                       <div 
-                        className="flex-shrink-0"
+                        className="flex-shrink-0 cursor-pointer"
                         onClick={(e) => handleTaskCheckboxClick(task, e)}
+                        title={isCompleted ? 'Task completed' : 'Mark as complete'}
                       >
                         {isCompleted ? (
                           <CheckCircle2 className="w-5 h-5 text-green-400 hover:text-green-300 transition-colors" />
@@ -783,8 +856,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
                         <div className="flex items-center gap-3">
                           {/* Completion checkbox */}
                           <div 
-                            className="flex-shrink-0"
+                            className="flex-shrink-0 cursor-pointer"
                             onClick={(e) => handleTaskCheckboxClick(task, e)}
+                            title={isCompleted ? 'Task completed' : 'Mark as complete'}
                           >
                             {isCompleted ? (
                               <CheckCircle2 className="w-5 h-5 text-green-400 hover:text-green-300 transition-colors" />
