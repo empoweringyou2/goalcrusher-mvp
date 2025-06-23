@@ -55,9 +55,15 @@ export async function sendToCrushion(userInput: string, userId: string, threadId
               user_id: userId
             };
 
-            // Ensure title is always present for create_task function
-            if (toolCall.function.name === "create_task" && (!augmentedArgs.title || augmentedArgs.title.trim() === "")) {
-              augmentedArgs.title = "Untitled Task from AI";
+            // Ensure title is always present and valid for create_task function
+            if (toolCall.function.name === "create_task") {
+              // Check if title is missing, null, undefined, or empty after trimming
+              if (!augmentedArgs.title || typeof augmentedArgs.title !== 'string' || augmentedArgs.title.trim() === "") {
+                augmentedArgs.title = "Untitled Task from AI";
+              } else {
+                // Ensure title is trimmed
+                augmentedArgs.title = augmentedArgs.title.trim();
+              }
             }
             
             // Call your Supabase Edge Function
