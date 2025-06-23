@@ -16,7 +16,6 @@ import {
   Copy,
   ArrowRight,
   Filter,
-  Search,
   CalendarDays,
   List,
   Grid3X3,
@@ -116,9 +115,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
   const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [showTaskModal, setShowTaskModal] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterCategory, setFilterCategory] = useState<string>('all');
-  const [filterPriority, setFilterPriority] = useState<string>('all');
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [taskToComplete, setTaskToComplete] = useState<Task | null>(null);
   const [userSettings, setUserSettings] = useState<UserSettings | null>(null);
@@ -338,47 +334,37 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
     }
   };
 
-  // Filter tasks based on search and filters
-  const filteredTasks = tasks.filter(task => {
-    const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         task.description?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = filterCategory === 'all' || task.category === filterCategory;
-    const matchesPriority = filterPriority === 'all' || task.priority === filterPriority;
-    
-    return matchesSearch && matchesCategory && matchesPriority;
-  });
-
-  // Get tasks for current view
+  // Get tasks for current view (no filtering since search/filters are removed)
   const getTasksForView = () => {
     const today = new Date();
     const currentDateStr = currentDate.toISOString().split('T')[0];
     
     switch (viewMode) {
       case 'day':
-        return filteredTasks.filter(task => task.scheduled_date === currentDateStr);
+        return tasks.filter(task => task.scheduled_date === currentDateStr);
       case 'week':
         const weekStart = new Date(currentDate);
         weekStart.setDate(currentDate.getDate() - currentDate.getDay());
         const weekEnd = new Date(weekStart);
         weekEnd.setDate(weekStart.getDate() + 6);
         
-        return filteredTasks.filter(task => {
+        return tasks.filter(task => {
           const taskDate = new Date(task.scheduled_date);
           return taskDate >= weekStart && taskDate <= weekEnd;
         });
       case 'month':
-        return filteredTasks.filter(task => {
+        return tasks.filter(task => {
           const taskDate = new Date(task.scheduled_date);
           return taskDate.getMonth() === currentDate.getMonth() && 
                  taskDate.getFullYear() === currentDate.getFullYear();
         });
       case 'year':
-        return filteredTasks.filter(task => {
+        return tasks.filter(task => {
           const taskDate = new Date(task.scheduled_date);
           return taskDate.getFullYear() === currentDate.getFullYear();
         });
       default:
-        return filteredTasks;
+        return tasks;
     }
   };
 
@@ -616,44 +602,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
             </button>
           ))}
         </div>
-
-        {/* Search and Filters */}
-        <div className="flex gap-2 flex-1">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search tasks..."
-              className="w-full bg-gray-800 text-white pl-10 pr-4 py-2 rounded-lg border border-gray-700 focus:border-yellow-400 focus:outline-none"
-            />
-          </div>
-          
-          <select
-            value={filterCategory}
-            onChange={(e) => setFilterCategory(e.target.value)}
-            className="bg-gray-800 text-white px-3 py-2 rounded-lg border border-gray-700 focus:border-yellow-400 focus:outline-none"
-          >
-            <option value="all">All Categories</option>
-            {Object.keys(categoryIcons).map(category => (
-              <option key={category} value={category} className="capitalize">
-                {category}
-              </option>
-            ))}
-          </select>
-          
-          <select
-            value={filterPriority}
-            onChange={(e) => setFilterPriority(e.target.value)}
-            className="bg-gray-800 text-white px-3 py-2 rounded-lg border border-gray-700 focus:border-yellow-400 focus:outline-none"
-          >
-            <option value="all">All Priorities</option>
-            <option value="high">High</option>
-            <option value="medium">Medium</option>
-            <option value="low">Low</option>
-          </select>
-        </div>
       </div>
 
       {/* Date Navigation */}
@@ -715,7 +663,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, user, appConfi
               <div className="p-8 text-center">
                 <Calendar className="w-12 h-12 text-gray-600 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-400 mb-2">No tasks found</h3>
-                <p className="text-gray-500">Try adjusting your filters or create a new task.</p>
+                <p className="text-gray-500">Create a new task to get started.</p>
               </div>
             ) : (
               viewTasks.map((task) => {
