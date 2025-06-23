@@ -248,7 +248,7 @@ export const createUserSettings = async (userId: string) => {
 }
 
 // Task management functions
-export const markTaskComplete = async (taskId: number) => {
+export const markTaskComplete = async (taskId: string) => {
   if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
     // For demo mode, just return success
     return { data: { id: taskId, completed: true }, error: null }
@@ -267,7 +267,7 @@ export const markTaskComplete = async (taskId: number) => {
   return { data, error }
 }
 
-export const markTaskIncomplete = async (taskId: number) => {
+export const markTaskIncomplete = async (taskId: string) => {
   if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
     // For demo mode, just return success
     return { data: { id: taskId, completed: false }, error: null }
