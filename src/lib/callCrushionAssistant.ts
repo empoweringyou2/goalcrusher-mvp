@@ -54,6 +54,11 @@ export async function sendToCrushion(userInput: string, userId: string, threadId
               ...functionArgs,
               user_id: userId
             };
+
+            // Ensure title is always present for create_task function
+            if (toolCall.function.name === "create_task" && (!augmentedArgs.title || augmentedArgs.title.trim() === "")) {
+              augmentedArgs.title = "Untitled Task from AI";
+            }
             
             // Call your Supabase Edge Function
             const result = await fetch("https://opcqlgrzyxrojzmflbez.functions.supabase.co/create_task", {
