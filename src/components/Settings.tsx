@@ -27,6 +27,7 @@ import {
   Book
 } from 'lucide-react';
 import { HelpCenter } from './HelpCenter';
+import { AccountabilitySettings } from './AccountabilitySettings';
 import { User as UserType, AppConfig } from '../types/user';
 
 interface SettingsProps {
@@ -595,9 +596,17 @@ export const Settings: React.FC<SettingsProps> = ({
     </div>
   );
 
-  // Accountability Tab Content
+  // Accountability Tab Content - Now using the new AccountabilitySettings component
   const AccountabilityTab = () => (
     <div className="space-y-6">
+      {/* Accountability Settings Component */}
+      <AccountabilitySettings 
+        userId={user.id}
+        onSettingsChange={(settings) => {
+          console.log('Accountability settings updated:', settings);
+        }}
+      />
+
       {/* Current Partners */}
       <div>
         <h4 className="text-white font-medium mb-3">Active Accountability Partners</h4>
