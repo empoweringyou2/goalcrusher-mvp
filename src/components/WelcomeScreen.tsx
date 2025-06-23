@@ -116,7 +116,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onLogin, onBypassL
           <div className="mb-8 relative">
             <div className="w-32 h-32 mx-auto bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-full flex items-center justify-center shadow-2xl shadow-yellow-400/30">
               <img 
-                src="/1.jpg" 
+                src="/logo_transparent_cropped.png" 
                 alt="GoalCrusher Logo"
                 className="w-16 h-16 animate-bounce"
               />
