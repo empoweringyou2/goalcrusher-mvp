@@ -26,10 +26,11 @@ export const useAuth = () => {
           hasAccessToken: !!accessToken, 
           hasRefreshToken: !!refreshToken, 
           hasCode: !!code, 
-          type 
+          type,
+          url: window.location.href
         })
 
-        // Handle email verification or OAuth callback
+        // Handle email verification or OAuth callback with tokens
         if (accessToken && refreshToken) {
           console.log('Setting session from URL tokens...')
           const { data, error } = await supabase.auth.setSession({
