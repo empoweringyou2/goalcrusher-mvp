@@ -1,1 +1,7 @@
+# Handle client-side routing
 /*    /index.html   200
+
+# Handle auth callbacks and email verification
+/auth/callback    /index.html   200
+/verify    /index.html   200
+/confirm    /index.html   200

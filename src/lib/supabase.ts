@@ -262,7 +262,7 @@ export const createUserSettings = async (userId: string) => {
 export const markTaskComplete = async (taskId: string) => {
   if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
     // For demo mode, just return success
-    return { data: { id: taskId, completed: true }, error: null }
+    return { data: { id: taskId, completed: true, xp_gained: 25 }, error: null }
   }
   
   const { data, error } = await supabase

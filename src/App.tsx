@@ -27,15 +27,22 @@ function App() {
     version: '1.0.0-beta'
   };
 
-  // Check if we're handling an auth callback or email verification
-  const isAuthCallback = window.location.pathname === '/auth/callback';
-  const isEmailVerification = window.location.pathname === '/verify' || 
-                              window.location.pathname === '/confirm' ||
-                              window.location.search.includes('type=signup') ||
-                              window.location.search.includes('type=email_confirmation') ||
-                              window.location.hash.includes('type=signup') ||
-                              window.location.hash.includes('type=email_confirmation') ||
-                              window.location.hash.includes('access_token');
+  // Check if we're handling different auth flows
+  const currentPath = window.location.pathname;
+  const currentSearch = window.location.search;
+  const currentHash = window.location.hash;
+  
+  const isAuthCallback = currentPath === '/auth/callback';
+  const isEmailVerification = currentPath === '/verify' || 
+                              currentPath === '/confirm' ||
+                              currentSearch.includes('type=signup') ||
+                              currentSearch.includes('type=email_confirmation') ||
+                              currentSearch.includes('access_token') ||
+                              currentHash.includes('type=signup') ||
+                              currentHash.includes('type=email_confirmation') ||
+                              currentHash.includes('access_token') ||
+                              currentSearch.includes('code=') ||
+                              currentHash.includes('code=');
 
   // Check if user has completed onboarding
   useEffect(() => {
@@ -95,7 +102,7 @@ function App() {
   };
 
   // Handle email verification
-  if (isEmailVerification) {
+  if (isEmailVerification && !isAuthCallback) {
     return (
       <EmailVerificationHandler 
         onVerificationComplete={handleEmailVerificationComplete}
@@ -167,8 +174,8 @@ function App() {
     return (
       <WelcomeScreen 
         onLogin={handleLogin} 
-        onBypassLogin={handleLogin} // Both now use the same handler since guest login is handled in WelcomeScreen
-        loadGuestUser={loadGuestUser} // Pass the loadGuestUser function
+        onBypassLogin={handleLogin}
+        loadGuestUser={loadGuestUser}
       />
     );
   }

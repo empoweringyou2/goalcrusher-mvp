@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { CheckCircle, AlertCircle, Loader2, ArrowRight, Mail } from 'lucide-react';
+import { CheckCircle, AlertCircle, Loader2, ArrowRight, Mail, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface EmailVerificationHandlerProps {
@@ -14,91 +14,126 @@ export const EmailVerificationHandler: React.FC<EmailVerificationHandlerProps> =
   const [status, setStatus] = useState<'verifying' | 'success' | 'error' | 'expired'>('verifying');
   const [message, setMessage] = useState('Verifying your email...');
   const [countdown, setCountdown] = useState(3);
+  const [debugInfo, setDebugInfo] = useState<any>(null);
 
   useEffect(() => {
     const handleEmailVerification = async () => {
       try {
-        // Get URL parameters
+        setMessage('Processing email verification...');
+        
+        // Get URL parameters from both search and hash
         const urlParams = new URLSearchParams(window.location.search);
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
         
-        // Check for verification parameters in both search and hash
+        // Extract all possible auth parameters
         const accessToken = urlParams.get('access_token') || hashParams.get('access_token');
         const refreshToken = urlParams.get('refresh_token') || hashParams.get('refresh_token');
         const tokenType = urlParams.get('token_type') || hashParams.get('token_type');
         const type = urlParams.get('type') || hashParams.get('type');
-        
-        console.log('Verification parameters:', { accessToken: !!accessToken, refreshToken: !!refreshToken, type });
+        const code = urlParams.get('code') || hashParams.get('code');
+        const error = urlParams.get('error') || hashParams.get('error');
+        const errorDescription = urlParams.get('error_description') || hashParams.get('error_description');
 
-        if (accessToken && refreshToken) {
-          // Set the session using the tokens
-          const { data, error } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken
-          });
+        const allParams = {
+          search: Object.fromEntries(urlParams),
+          hash: Object.fromEntries(hashParams),
+          extracted: { accessToken: !!accessToken, refreshToken: !!refreshToken, type, code: !!code, error }
+        };
 
-          if (error) {
-            console.error('Session error:', error);
+        console.log('Email verification parameters:', allParams);
+        setDebugInfo(allParams);
+
+        // Handle errors first
+        if (error) {
+          console.error('Verification error from URL:', error, errorDescription);
+          setStatus('error');
+          setMessage(`Verification failed: ${errorDescription || error}`);
+          onVerificationError(errorDescription || error);
+          return;
+        }
+
+        // Handle OAuth code exchange
+        if (code) {
+          setMessage('Exchanging verification code...');
+          
+          const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+          
+          if (exchangeError) {
+            console.error('Code exchange error:', exchangeError);
             setStatus('error');
-            setMessage('Failed to verify email. The link may be expired or invalid.');
-            onVerificationError(error.message);
+            setMessage('Failed to verify email. The verification link may be expired.');
+            onVerificationError(exchangeError.message);
             return;
           }
 
           if (data.session) {
-            console.log('Email verification successful:', data.session.user.email);
+            console.log('Email verification successful via code exchange:', data.session.user.email);
             setStatus('success');
-            setMessage('Email verified successfully! Redirecting to dashboard...');
-            
-            // Start countdown
-            const timer = setInterval(() => {
-              setCountdown(prev => {
-                if (prev <= 1) {
-                  clearInterval(timer);
-                  onVerificationComplete();
-                  return 0;
-                }
-                return prev - 1;
-              });
-            }, 1000);
-
+            setMessage('Email verified successfully! Welcome to GoalCrusher!');
+            startSuccessCountdown();
             return;
           }
         }
 
-        // Check for confirmation type (email confirmation)
-        if (type === 'signup' || type === 'email_confirmation') {
-          // Handle email confirmation
-          const { data, error } = await supabase.auth.getSession();
+        // Handle direct token verification
+        if (accessToken && refreshToken) {
+          setMessage('Confirming email verification...');
           
-          if (error) {
-            console.error('Session retrieval error:', error);
-            setStatus('error');
-            setMessage('Failed to confirm email. Please try signing in again.');
-            onVerificationError(error.message);
+          const { data, error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken
+          });
+
+          if (sessionError) {
+            console.error('Session error:', sessionError);
+            
+            // Check if it's an expired token error
+            if (sessionError.message.includes('expired') || sessionError.message.includes('invalid')) {
+              setStatus('expired');
+              setMessage('This verification link has expired. Please request a new verification email.');
+            } else {
+              setStatus('error');
+              setMessage('Failed to verify email. Please try again or request a new verification link.');
+            }
+            onVerificationError(sessionError.message);
             return;
           }
 
           if (data.session) {
+            console.log('Email verification successful via token:', data.session.user.email);
             setStatus('success');
-            setMessage('Email confirmed successfully! Redirecting to dashboard...');
-            
-            const timer = setInterval(() => {
-              setCountdown(prev => {
-                if (prev <= 1) {
-                  clearInterval(timer);
-                  onVerificationComplete();
-                  return 0;
-                }
-                return prev - 1;
-              });
-            }, 1000);
+            setMessage('Email verified successfully! Your account is now active.');
+            startSuccessCountdown();
+            return;
+          }
+        }
 
+        // Handle signup confirmation type
+        if (type === 'signup' || type === 'email_confirmation') {
+          setMessage('Confirming email address...');
+          
+          // Check if we already have a session
+          const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+          
+          if (sessionError) {
+            console.error('Session check error:', sessionError);
+            setStatus('error');
+            setMessage('Failed to confirm email. Please try signing in again.');
+            onVerificationError(sessionError.message);
+            return;
+          }
+
+          if (sessionData.session) {
+            console.log('Email confirmation successful:', sessionData.session.user.email);
+            setStatus('success');
+            setMessage('Email confirmed successfully! Your account is ready.');
+            startSuccessCountdown();
             return;
           }
         }
 
         // If we get here, no valid verification parameters were found
+        console.warn('No valid verification parameters found');
         setStatus('error');
         setMessage('Invalid verification link. Please check your email for a valid confirmation link.');
         onVerificationError('Invalid verification parameters');
@@ -111,6 +146,19 @@ export const EmailVerificationHandler: React.FC<EmailVerificationHandlerProps> =
       }
     };
 
+    const startSuccessCountdown = () => {
+      const timer = setInterval(() => {
+        setCountdown(prev => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            onVerificationComplete();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    };
+
     handleEmailVerification();
   }, [onVerificationComplete, onVerificationError]);
 
@@ -121,6 +169,12 @@ export const EmailVerificationHandler: React.FC<EmailVerificationHandlerProps> =
       // Redirect to login page
       window.location.href = '/';
     }
+  };
+
+  const handleRetry = () => {
+    setStatus('verifying');
+    setMessage('Retrying verification...');
+    window.location.reload();
   };
 
   return (
@@ -171,12 +225,13 @@ export const EmailVerificationHandler: React.FC<EmailVerificationHandlerProps> =
             <p className="text-gray-400 mb-6">{message}</p>
             
             <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 mb-6">
-              <h3 className="text-red-400 font-medium mb-2">Common solutions:</h3>
+              <h3 className="text-red-400 font-medium mb-2">What you can try:</h3>
               <ul className="text-gray-400 text-sm space-y-1 text-left">
                 <li>• Check if you've already verified this email</li>
-                <li>• Look for a newer verification email</li>
+                <li>• Look for a newer verification email in your inbox</li>
+                <li>• Check your spam/junk folder</li>
                 <li>• Try signing in if you've already verified</li>
-                <li>• Request a new verification email</li>
+                <li>• Request a new verification email from the login page</li>
               </ul>
             </div>
 
@@ -189,9 +244,10 @@ export const EmailVerificationHandler: React.FC<EmailVerificationHandlerProps> =
               </button>
               
               <button
-                onClick={() => window.location.reload()}
-                className="w-full bg-gray-800 text-white px-6 py-3 rounded-lg font-medium hover:bg-gray-700 transition-colors border border-gray-700"
+                onClick={handleRetry}
+                className="w-full bg-gray-800 text-white px-6 py-3 rounded-lg font-medium hover:bg-gray-700 transition-colors border border-gray-700 flex items-center gap-2 justify-center"
               >
+                <RefreshCw className="w-4 h-4" />
                 Try Again
               </button>
             </div>
@@ -202,7 +258,13 @@ export const EmailVerificationHandler: React.FC<EmailVerificationHandlerProps> =
           <>
             <Mail className="w-16 h-16 text-orange-400 mx-auto mb-6" />
             <h2 className="text-2xl font-bold text-white mb-4">Link Expired</h2>
-            <p className="text-gray-400 mb-6">This verification link has expired. Please request a new one.</p>
+            <p className="text-gray-400 mb-6">This verification link has expired. Please request a new one from the login page.</p>
+            
+            <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-4 mb-6">
+              <p className="text-orange-400 text-sm">
+                📧 Verification links expire for security. You can request a new one by trying to sign in again.
+              </p>
+            </div>
             
             <button
               onClick={handleManualRedirect}
@@ -211,6 +273,18 @@ export const EmailVerificationHandler: React.FC<EmailVerificationHandlerProps> =
               Request New Link
             </button>
           </>
+        )}
+
+        {/* Debug Information (only in development) */}
+        {import.meta.env.DEV && debugInfo && (
+          <details className="mt-6 text-left">
+            <summary className="text-gray-400 text-sm cursor-pointer hover:text-white">
+              Debug Information (Dev Only)
+            </summary>
+            <pre className="text-xs text-gray-500 bg-gray-900 p-3 rounded mt-2 overflow-auto max-h-40 border border-gray-800">
+              {JSON.stringify(debugInfo, null, 2)}
+            </pre>
+          </details>
         )}
       </div>
     </div>
