@@ -8,6 +8,7 @@ import { Settings } from './components/Settings';
 import { Navigation } from './components/Navigation';
 import { OnboardingTutorial } from './components/OnboardingTutorial';
 import { AuthCallback } from './components/AuthCallback';
+import { EmailVerificationHandler } from './components/EmailVerificationHandler';
 import { useAuth } from './hooks/useAuth';
 import { AppConfig } from './types/user';
 import { Loader2, AlertCircle } from 'lucide-react';
@@ -26,8 +27,15 @@ function App() {
     version: '1.0.0-beta'
   };
 
-  // Check if we're handling an auth callback
+  // Check if we're handling an auth callback or email verification
   const isAuthCallback = window.location.pathname === '/auth/callback';
+  const isEmailVerification = window.location.pathname === '/verify' || 
+                              window.location.pathname === '/confirm' ||
+                              window.location.search.includes('type=signup') ||
+                              window.location.search.includes('type=email_confirmation') ||
+                              window.location.hash.includes('type=signup') ||
+                              window.location.hash.includes('type=email_confirmation') ||
+                              window.location.hash.includes('access_token');
 
   // Check if user has completed onboarding
   useEffect(() => {
@@ -74,6 +82,28 @@ function App() {
     window.history.replaceState({}, '', '/');
   };
 
+  const handleEmailVerificationComplete = () => {
+    // Redirect to dashboard after successful email verification
+    window.history.replaceState({}, '', '/');
+    handleLogin();
+  };
+
+  const handleEmailVerificationError = (errorMessage: string) => {
+    setAuthError(errorMessage);
+    // Redirect back to welcome screen
+    window.history.replaceState({}, '', '/');
+  };
+
+  // Handle email verification
+  if (isEmailVerification) {
+    return (
+      <EmailVerificationHandler 
+        onVerificationComplete={handleEmailVerificationComplete}
+        onVerificationError={handleEmailVerificationError}
+      />
+    );
+  }
+
   // Handle auth callback
   if (isAuthCallback) {
     return (
@@ -105,15 +135,28 @@ function App() {
           <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
           <h2 className="text-xl font-semibold mb-2">Something went wrong</h2>
           <p className="text-gray-400 mb-6">{error || authError}</p>
-          <button
-            onClick={() => {
-              setAuthError(null);
-              window.location.reload();
-            }}
-            className="bg-yellow-400 text-black px-6 py-2 rounded-lg font-semibold hover:bg-yellow-300 transition-colors"
-          >
-            Try Again
-          </button>
+          
+          <div className="space-y-3">
+            <button
+              onClick={() => {
+                setAuthError(null);
+                window.location.reload();
+              }}
+              className="w-full bg-yellow-400 text-black px-6 py-2 rounded-lg font-semibold hover:bg-yellow-300 transition-colors"
+            >
+              Try Again
+            </button>
+            
+            <button
+              onClick={() => {
+                setAuthError(null);
+                window.location.href = '/';
+              }}
+              className="w-full bg-gray-800 text-white px-6 py-2 rounded-lg font-medium hover:bg-gray-700 transition-colors border border-gray-700"
+            >
+              Back to Home
+            </button>
+          </div>
         </div>
       </div>
     );

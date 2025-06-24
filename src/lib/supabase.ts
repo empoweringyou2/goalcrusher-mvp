@@ -16,7 +16,9 @@ if (!supabaseUrl || !supabaseAnonKey) {
       signUp: () => Promise.resolve({ data: null, error: { message: 'Supabase not configured' } }),
       signInWithPassword: () => Promise.resolve({ data: null, error: { message: 'Supabase not configured' } }),
       signOut: () => Promise.resolve({ error: null }),
-      resetPasswordForEmail: () => Promise.resolve({ data: null, error: { message: 'Supabase not configured' } })
+      resetPasswordForEmail: () => Promise.resolve({ data: null, error: { message: 'Supabase not configured' } }),
+      setSession: () => Promise.resolve({ data: { session: null }, error: { message: 'Supabase not configured' } }),
+      exchangeCodeForSession: () => Promise.resolve({ data: { session: null }, error: { message: 'Supabase not configured' } })
     },
     from: () => ({
       insert: () => ({ select: () => ({ single: () => Promise.resolve({ data: null, error: { message: 'Supabase not configured' } }) }) }),
@@ -27,7 +29,15 @@ if (!supabaseUrl || !supabaseAnonKey) {
   
   supabase = mockClient
 } else {
-  supabase = createClient(supabaseUrl, supabaseAnonKey)
+  supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      // Configure auth settings for better email verification handling
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: true,
+      flowType: 'pkce'
+    }
+  })
 }
 
 export { supabase }
@@ -77,7 +87,8 @@ export const signUpWithEmail = async (email: string, password: string, name: str
       data: {
         name: name,
         avatar: '🧙‍♂️'
-      }
+      },
+      emailRedirectTo: `${window.location.origin}/verify`
     }
   })
   return { data, error }

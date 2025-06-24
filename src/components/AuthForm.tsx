@@ -156,7 +156,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onSuccess }) => {
         if (error) {
           setError(parseSupabaseError(error));
         } else {
-          setSuccess('Account created! Please check your email to verify your account before signing in.');
+          setSuccess('Account created! Please check your email to verify your account. You may need to check your spam folder.');
         }
       } else {
         const { error } = await signInWithEmail(formData.email, formData.password);
@@ -252,7 +252,16 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onSuccess }) => {
       {success && (
         <div className="mb-4 p-3 bg-green-500/10 border border-green-500/20 rounded-lg flex items-center gap-2">
           <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
-          <span className="text-green-400 text-sm">{success}</span>
+          <div className="flex-1">
+            <span className="text-green-400 text-sm">{success}</span>
+            {mode === 'signup' && (
+              <div className="mt-2 text-xs text-gray-400">
+                <p>📧 Check your email for a verification link</p>
+                <p>🔍 Don't forget to check your spam folder</p>
+                <p>🔗 Click the link to activate your account</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -481,7 +490,8 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onSuccess }) => {
             <strong>Having trouble signing in?</strong><br />
             • Double-check your email and password for typos<br />
             • If you signed up with Google/Apple, use those buttons instead<br />
-            • Check your email for a verification link if you just signed up
+            • Check your email for a verification link if you just signed up<br />
+            • Make sure you've verified your email address
           </p>
         </div>
       )}
