@@ -86,7 +86,7 @@ export const ProBadge: React.FC<{ className?: string }> = ({ className = '' }) =
   </div>
 );
 
-export const ProTooltip: React.FC<{ featureName: string; children: React.ReactNode }> = ({ featureName, children }) => (
+const ProTooltip: React.FC<{ featureName: string; children: React.ReactNode }> = ({ featureName, children }) => (
   <div className="group relative">
     {children}
     <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
