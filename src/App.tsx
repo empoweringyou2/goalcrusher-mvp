@@ -89,26 +89,9 @@ function App() {
     window.history.replaceState({}, '', '/');
   };
 
-  const handleEmailVerificationComplete = () => {
-    // Redirect to dashboard after successful email verification
-    window.history.replaceState({}, '', '/');
-    handleLogin();
-  };
-
-  const handleEmailVerificationError = (errorMessage: string) => {
-    setAuthError(errorMessage);
-    // Redirect back to welcome screen
-    window.history.replaceState({}, '', '/');
-  };
-
-  // Handle email verification
+  // Handle email verification - simplified to just show the handler
   if (isEmailVerification && !isAuthCallback) {
-    return (
-      <EmailVerificationHandler 
-        onVerificationComplete={handleEmailVerificationComplete}
-        onVerificationError={handleEmailVerificationError}
-      />
-    );
+    return <EmailVerificationHandler />;
   }
 
   // Handle auth callback

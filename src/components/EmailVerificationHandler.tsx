@@ -1,19 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { CheckCircle, AlertCircle, Loader2, ArrowRight, Mail, RefreshCw } from 'lucide-react';
+import { CheckCircle, AlertCircle, Loader2, Mail, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
-interface EmailVerificationHandlerProps {
-  onVerificationComplete: () => void;
-  onVerificationError: (error: string) => void;
-}
-
-export const EmailVerificationHandler: React.FC<EmailVerificationHandlerProps> = ({
-  onVerificationComplete,
-  onVerificationError
-}) => {
+export const EmailVerificationHandler: React.FC = () => {
   const [status, setStatus] = useState<'verifying' | 'success' | 'error' | 'expired'>('verifying');
   const [message, setMessage] = useState('Verifying your email...');
-  const [countdown, setCountdown] = useState(3);
   const [debugInfo, setDebugInfo] = useState<any>(null);
 
   useEffect(() => {
@@ -48,7 +39,10 @@ export const EmailVerificationHandler: React.FC<EmailVerificationHandlerProps> =
           console.error('Verification error from URL:', error, errorDescription);
           setStatus('error');
           setMessage(`Verification failed: ${errorDescription || error}`);
-          onVerificationError(errorDescription || error);
+          // Redirect to home after showing error
+          setTimeout(() => {
+            window.location.href = '/';
+          }, 3000);
           return;
         }
 
@@ -62,7 +56,10 @@ export const EmailVerificationHandler: React.FC<EmailVerificationHandlerProps> =
             console.error('Code exchange error:', exchangeError);
             setStatus('error');
             setMessage('Failed to verify email. The verification link may be expired.');
-            onVerificationError(exchangeError.message);
+            // Redirect to home after showing error
+            setTimeout(() => {
+              window.location.href = '/';
+            }, 3000);
             return;
           }
 
@@ -70,7 +67,11 @@ export const EmailVerificationHandler: React.FC<EmailVerificationHandlerProps> =
             console.log('Email verification successful via code exchange:', data.session.user.email);
             setStatus('success');
             setMessage('Email verified successfully! Welcome to GoalCrusher!');
-            startSuccessCountdown();
+            // Clean up URL and redirect to home
+            setTimeout(() => {
+              window.history.replaceState({}, '', '/');
+              window.location.href = '/';
+            }, 2000);
             return;
           }
         }
@@ -95,7 +96,10 @@ export const EmailVerificationHandler: React.FC<EmailVerificationHandlerProps> =
               setStatus('error');
               setMessage('Failed to verify email. Please try again or request a new verification link.');
             }
-            onVerificationError(sessionError.message);
+            // Redirect to home after showing error
+            setTimeout(() => {
+              window.location.href = '/';
+            }, 3000);
             return;
           }
 
@@ -103,7 +107,11 @@ export const EmailVerificationHandler: React.FC<EmailVerificationHandlerProps> =
             console.log('Email verification successful via token:', data.session.user.email);
             setStatus('success');
             setMessage('Email verified successfully! Your account is now active.');
-            startSuccessCountdown();
+            // Clean up URL and redirect to home
+            setTimeout(() => {
+              window.history.replaceState({}, '', '/');
+              window.location.href = '/';
+            }, 2000);
             return;
           }
         }
@@ -119,7 +127,10 @@ export const EmailVerificationHandler: React.FC<EmailVerificationHandlerProps> =
             console.error('Session check error:', sessionError);
             setStatus('error');
             setMessage('Failed to confirm email. Please try signing in again.');
-            onVerificationError(sessionError.message);
+            // Redirect to home after showing error
+            setTimeout(() => {
+              window.location.href = '/';
+            }, 3000);
             return;
           }
 
@@ -127,7 +138,11 @@ export const EmailVerificationHandler: React.FC<EmailVerificationHandlerProps> =
             console.log('Email confirmation successful:', sessionData.session.user.email);
             setStatus('success');
             setMessage('Email confirmed successfully! Your account is ready.');
-            startSuccessCountdown();
+            // Clean up URL and redirect to home
+            setTimeout(() => {
+              window.history.replaceState({}, '', '/');
+              window.location.href = '/';
+            }, 2000);
             return;
           }
         }
@@ -136,39 +151,27 @@ export const EmailVerificationHandler: React.FC<EmailVerificationHandlerProps> =
         console.warn('No valid verification parameters found');
         setStatus('error');
         setMessage('Invalid verification link. Please check your email for a valid confirmation link.');
-        onVerificationError('Invalid verification parameters');
+        // Redirect to home after showing error
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 3000);
 
       } catch (err) {
         console.error('Verification error:', err);
         setStatus('error');
         setMessage('An unexpected error occurred during verification.');
-        onVerificationError(err instanceof Error ? err.message : 'Unknown error');
+        // Redirect to home after showing error
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 3000);
       }
     };
 
-    const startSuccessCountdown = () => {
-      const timer = setInterval(() => {
-        setCountdown(prev => {
-          if (prev <= 1) {
-            clearInterval(timer);
-            onVerificationComplete();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    };
-
     handleEmailVerification();
-  }, [onVerificationComplete, onVerificationError]);
+  }, []);
 
   const handleManualRedirect = () => {
-    if (status === 'success') {
-      onVerificationComplete();
-    } else {
-      // Redirect to login page
-      window.location.href = '/';
-    }
+    window.location.href = '/';
   };
 
   const handleRetry = () => {
@@ -204,16 +207,15 @@ export const EmailVerificationHandler: React.FC<EmailVerificationHandlerProps> =
                 🎉 Welcome to GoalCrusher! Your account is now active.
               </p>
               <p className="text-gray-400 text-xs">
-                Redirecting in {countdown} second{countdown !== 1 ? 's' : ''}...
+                Redirecting to dashboard...
               </p>
             </div>
 
             <button
               onClick={handleManualRedirect}
-              className="bg-yellow-400 text-black px-6 py-3 rounded-lg font-semibold hover:bg-yellow-300 transition-colors flex items-center gap-2 mx-auto"
+              className="bg-yellow-400 text-black px-6 py-3 rounded-lg font-semibold hover:bg-yellow-300 transition-colors"
             >
               Continue to Dashboard
-              <ArrowRight className="w-4 h-4" />
             </button>
           </>
         )}
