@@ -278,7 +278,7 @@ export const markTaskComplete = async (taskId: string) => {
   return { data, error }
 }
 
-const markTaskIncomplete = async (taskId: string) => {
+export const markTaskIncomplete = async (taskId: string) => {
   if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
     // For demo mode, just return success
     return { data: { id: taskId, completed: false }, error: null }

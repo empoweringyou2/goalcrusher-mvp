@@ -48,7 +48,7 @@ export const getUserSettings = async (userId: string): Promise<UserSettings | nu
   }
 };
 
-const updateUserSettings = async (userId: string, settings: Partial<UserSettings>): Promise<boolean> => {
+export const updateUserSettings = async (userId: string, settings: Partial<UserSettings>): Promise<boolean> => {
   try {
     if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
       // Fallback to localStorage for demo mode
@@ -78,7 +78,7 @@ const updateUserSettings = async (userId: string, settings: Partial<UserSettings
   }
 };
 
-const scheduleFollowUpEvent = async (
+export const scheduleFollowUpEvent = async (
   userId: string, 
   taskId: string, 
   taskTitle: string, 
@@ -125,10 +125,10 @@ const scheduleFollowUpEvent = async (
   }
 };
 
-const getTaskCompletionModalType = (settings: UserSettings): 'user' | 'ai' | 'external' => {
+export const getTaskCompletionModalType = (settings: UserSettings): 'user' | 'ai' | 'external' => {
   return settings.completion_method_setting;
 };
 
-const shouldScheduleFollowUp = (accountabilityType: string): boolean => {
+export const shouldScheduleFollowUp = (accountabilityType: string): boolean => {
   return accountabilityType !== 'self';
 };
