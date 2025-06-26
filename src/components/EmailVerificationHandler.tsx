@@ -34,7 +34,9 @@ export const EmailVerificationHandler: React.FC = () => {
         setMessage('Exchanging verification code...');
         console.log('[EmailVerification] Attempting to exchange code for session...');
         
+        // 🔍 DEBUG STEP 1: Log the exchange result
         const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+        console.log('[Exchange Result]', data, error);
         
         if (error) {
           console.error('[EmailVerification] Verification failed:', error.message);
@@ -57,6 +59,10 @@ export const EmailVerificationHandler: React.FC = () => {
         if (data.session) {
           console.log('[EmailVerification] Initial session established:', data.session.user.email);
           
+          // 🔍 DEBUG STEP 2: Check session immediately after exchange
+          const sessionResponse = await supabase.auth.getSession();
+          console.log('[Post-Exchange Session]', sessionResponse.data.session);
+          
           // Wait until session is available and stable
           setMessage('Finalizing authentication...');
           
@@ -74,10 +80,12 @@ export const EmailVerificationHandler: React.FC = () => {
               // Force session refresh and add delay before redirect
               console.log('[EmailVerification] Session ready, refreshing session and redirecting...');
               await supabase.auth.getSession();
+              
+              // 🔍 DEBUG STEP 3: Increased delay from 400ms to 1000ms
               setTimeout(() => {
                 console.log('[EmailVerification] Redirecting to dashboard...');
                 navigate('/', { replace: true });
-              }, 400);
+              }, 1000);
             }
           }, 300);
 
@@ -91,9 +99,11 @@ export const EmailVerificationHandler: React.FC = () => {
               
               // Force session refresh and add delay before redirect
               await supabase.auth.getSession();
+              
+              // 🔍 DEBUG STEP 3: Increased delay from 400ms to 1000ms
               setTimeout(() => {
                 navigate('/', { replace: true });
-              }, 400);
+              }, 1000);
             }
           }, 5000);
           
