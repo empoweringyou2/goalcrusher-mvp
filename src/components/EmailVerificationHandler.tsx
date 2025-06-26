@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { CheckCircle, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 export const EmailVerificationHandler: React.FC = () => {
+  const [searchParams] = useSearchParams();
   const [status, setStatus] = useState<'verifying' | 'success' | 'error'>('verifying');
   const [message, setMessage] = useState('Verifying your email...');
 
@@ -12,10 +14,9 @@ export const EmailVerificationHandler: React.FC = () => {
         setMessage('Processing email verification...');
         
         // Extract the verification code from URL
-        const urlParams = new URLSearchParams(window.location.search);
-        const code = urlParams.get('code');
+        const code = searchParams.get('code');
         
-        console.log('[EmailVerification] URL params:', Object.fromEntries(urlParams));
+        console.log('[EmailVerification] URL params:', Object.fromEntries(searchParams));
         console.log('[EmailVerification] Verification code found:', !!code);
 
         if (!code) {
@@ -116,7 +117,7 @@ export const EmailVerificationHandler: React.FC = () => {
     };
 
     verifyEmail();
-  }, []);
+  }, [searchParams]);
 
   const handleManualRedirect = () => {
     window.location.href = '/';
