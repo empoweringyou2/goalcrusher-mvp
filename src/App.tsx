@@ -7,7 +7,6 @@ import { Analytics } from './components/Analytics';
 import { Settings } from './components/Settings';
 import { Navigation } from './components/Navigation';
 import { OnboardingTutorial } from './components/OnboardingTutorial';
-import { AuthCallback } from './components/AuthCallback';
 import { EmailVerificationHandler } from './components/EmailVerificationHandler';
 import { useAuth } from './hooks/useAuth';
 import { AppConfig } from './types/user';
@@ -27,12 +26,11 @@ function App() {
     version: '1.0.0-beta'
   };
 
-  // Check if we're handling different auth flows
+  // Check if we're handling email verification
   const currentPath = window.location.pathname;
   const currentSearch = window.location.search;
   const currentHash = window.location.hash;
   
-  const isAuthCallback = currentPath === '/auth/callback';
   const isEmailVerification = currentPath === '/verify' || 
                               currentPath === '/confirm' ||
                               currentSearch.includes('type=signup') ||
@@ -77,31 +75,9 @@ function App() {
     setShowOnboarding(true);
   };
 
-  const handleAuthCallbackSuccess = () => {
-    // Redirect to dashboard after successful OAuth
-    window.history.replaceState({}, '', '/');
-    handleLogin();
-  };
-
-  const handleAuthCallbackError = (errorMessage: string) => {
-    setAuthError(errorMessage);
-    // Redirect back to welcome screen
-    window.history.replaceState({}, '', '/');
-  };
-
-  // Handle email verification - simplified to just show the handler
-  if (isEmailVerification && !isAuthCallback) {
+  // Handle email verification
+  if (isEmailVerification) {
     return <EmailVerificationHandler />;
-  }
-
-  // Handle auth callback
-  if (isAuthCallback) {
-    return (
-      <AuthCallback 
-        onSuccess={handleAuthCallbackSuccess}
-        onError={handleAuthCallbackError}
-      />
-    );
   }
 
   // Show loading screen while checking auth
