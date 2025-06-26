@@ -10,70 +10,9 @@ export const useAuth = () => {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    // Get initial session and handle URL-based auth
+    // Get initial session - simplified to only check existing session
     const getInitialSession = async () => {
       try {
-        // First, check if there are auth tokens in the URL
-        const urlParams = new URLSearchParams(window.location.search)
-        const hashParams = new URLSearchParams(window.location.hash.substring(1))
-        
-        const accessToken = urlParams.get('access_token') || hashParams.get('access_token')
-        const refreshToken = urlParams.get('refresh_token') || hashParams.get('refresh_token')
-        const code = urlParams.get('code') || hashParams.get('code')
-        const type = urlParams.get('type') || hashParams.get('type')
-
-        console.log('Auth URL check:', { 
-          hasAccessToken: !!accessToken, 
-          hasRefreshToken: !!refreshToken, 
-          hasCode: !!code, 
-          type,
-          url: window.location.href
-        })
-
-        // Handle email verification or OAuth callback with tokens
-        if (accessToken && refreshToken) {
-          console.log('Setting session from URL tokens...')
-          const { data, error } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken
-          })
-          
-          if (error) {
-            console.error('Error setting session from URL:', error)
-            setError(error.message)
-          } else if (data.session?.user) {
-            console.log('Session set successfully from URL')
-            setSupabaseUser(data.session.user)
-            await loadUserProfile(data.session.user.id)
-            
-            // Clean up URL after successful auth
-            window.history.replaceState({}, '', window.location.pathname)
-            setLoading(false)
-            return
-          }
-        }
-
-        // Handle OAuth code exchange
-        if (code) {
-          console.log('Exchanging OAuth code for session...')
-          const { data, error } = await supabase.auth.exchangeCodeForSession(code)
-          
-          if (error) {
-            console.error('Error exchanging code:', error)
-            setError(error.message)
-          } else if (data.session?.user) {
-            console.log('OAuth code exchange successful')
-            setSupabaseUser(data.session.user)
-            await loadUserProfile(data.session.user.id)
-            
-            // Clean up URL after successful auth
-            window.history.replaceState({}, '', window.location.pathname)
-            setLoading(false)
-            return
-          }
-        }
-
-        // Check for existing session
         console.log('Checking for existing session...')
         const { data: { session }, error } = await supabase.auth.getSession()
         
@@ -98,7 +37,7 @@ export const useAuth = () => {
 
     getInitialSession()
 
-    // Listen for auth changes
+    // Listen for auth changes - this will handle session establishment from AuthCallback/EmailVerificationHandler
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('Auth state changed:', event, session?.user?.id)
