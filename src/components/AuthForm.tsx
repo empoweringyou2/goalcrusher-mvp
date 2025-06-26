@@ -125,6 +125,16 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onSuccess }) => {
       return 'Please enter a valid email address.';
     }
     
+    // Handle signup disabled
+    if (message.includes('Signups not allowed')) {
+      return 'New account registration is currently disabled. Please contact support.';
+    }
+    
+    // Handle configuration errors
+    if (message.includes('Supabase not configured')) {
+      return 'Authentication service is not properly configured. Please contact support.';
+    }
+    
     // Default error message
     return message || 'An unexpected error occurred. Please try again.';
   };
@@ -145,28 +155,51 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onSuccess }) => {
 
     try {
       if (mode === 'forgot') {
+        console.log('[AuthForm] Attempting password reset for:', formData.email);
         const { error } = await resetPassword(formData.email);
         if (error) {
+          console.error('[AuthForm] Password reset error:', error);
           setError(parseSupabaseError(error));
         } else {
+          console.log('[AuthForm] Password reset email sent successfully');
           setSuccess('Password reset email sent! Check your inbox and spam folder.');
         }
       } else if (mode === 'signup') {
-        const { error } = await signUpWithEmail(formData.email, formData.password, formData.name);
+        console.log('[AuthForm] Attempting signup for:', formData.email);
+        const { data, error } = await signUpWithEmail(formData.email, formData.password, formData.name);
         if (error) {
+          console.error('[AuthForm] Signup error:', error);
           setError(parseSupabaseError(error));
         } else {
-          setSuccess('Account created! Please check your email to verify your account. You may need to check your spam folder.');
+          console.log('[AuthForm] Signup successful:', {
+            user: !!data?.user,
+            session: !!data?.session,
+            needsConfirmation: !data?.session
+          });
+          
+          if (data?.session) {
+            // User is immediately signed in (email confirmation disabled)
+            console.log('[AuthForm] User signed in immediately');
+            onSuccess();
+          } else {
+            // User needs to confirm email
+            console.log('[AuthForm] User needs to confirm email');
+            setSuccess('Account created! Please check your email to verify your account. You may need to check your spam folder.');
+          }
         }
       } else {
-        const { error } = await signInWithEmail(formData.email, formData.password);
+        console.log('[AuthForm] Attempting signin for:', formData.email);
+        const { data, error } = await signInWithEmail(formData.email, formData.password);
         if (error) {
+          console.error('[AuthForm] Signin error:', error);
           setError(parseSupabaseError(error));
         } else {
+          console.log('[AuthForm] Signin successful');
           onSuccess();
         }
       }
     } catch (err: any) {
+      console.error('[AuthForm] Unexpected error:', err);
       setError(parseSupabaseError(err));
     } finally {
       setLoading(false);
@@ -178,15 +211,20 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onSuccess }) => {
     setError(null);
 
     try {
+      console.log(`[AuthForm] Attempting ${provider} OAuth`);
       const { error } = provider === 'google' 
         ? await signInWithGoogle()
         : await signInWithApple();
       
       if (error) {
+        console.error(`[AuthForm] ${provider} OAuth error:`, error);
         setError(parseSupabaseError(error));
+      } else {
+        console.log(`[AuthForm] ${provider} OAuth initiated successfully`);
+        // Note: For OAuth, the redirect will handle success
       }
-      // Note: For OAuth, the redirect will handle success
     } catch (err: any) {
+      console.error(`[AuthForm] ${provider} OAuth unexpected error:`, err);
       setError(parseSupabaseError(err));
     } finally {
       setLoading(false);
@@ -254,11 +292,12 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onSuccess }) => {
           <CheckCircle className="w-4 h-4 text-green-400 flex-shrink-0" />
           <div className="flex-1">
             <span className="text-green-400 text-sm">{success}</span>
-            {mode === 'signup' && (
+            {mode === 'signup' && success.includes('check your email') && (
               <div className="mt-2 text-xs text-gray-400">
                 <p>📧 Check your email for a verification link</p>
                 <p>🔍 Don't forget to check your spam folder</p>
                 <p>🔗 Click the link to activate your account</p>
+                <p>🌐 Open the link in your main browser (Chrome, Safari, etc.)</p>
               </div>
             )}
           </div>
@@ -492,6 +531,18 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onSuccess }) => {
             • If you signed up with Google/Apple, use those buttons instead<br />
             • Check your email for a verification link if you just signed up<br />
             • Make sure you've verified your email address
+          </p>
+        </div>
+      )}
+
+      {mode === 'signup' && (
+        <div className="mt-6 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+          <p className="text-blue-400 text-xs">
+            <strong>Email Verification Tips:</strong><br />
+            • Check your spam/junk folder if you don't see the email<br />
+            • Open verification links in your main browser (Chrome, Safari, etc.)<br />
+            • Avoid opening links in email app previews<br />
+            • The verification link expires after 24 hours
           </p>
         </div>
       )}

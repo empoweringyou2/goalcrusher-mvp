@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { CheckCircle, AlertCircle, Loader2, RefreshCw, Info, ExternalLink, Globe } from 'lucide-react';
+import { CheckCircle, AlertCircle, Loader2, RefreshCw, Info, ExternalLink, Globe, Hash } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 
 export const EmailVerificationHandler: React.FC = () => {
@@ -16,17 +17,78 @@ export const EmailVerificationHandler: React.FC = () => {
     suggestions: string[];
   } | null>(null);
 
+  // Helper function to extract hash fragments
+  const extractHashFragments = () => {
+    const hash = window.location.hash;
+    const fragments: Record<string, string> = {};
+    
+    if (hash) {
+      console.log('[EmailVerification] Found hash fragment:', hash);
+      
+      // Remove the # and split by &
+      const params = hash.substring(1).split('&');
+      
+      for (const param of params) {
+        const [key, value] = param.split('=');
+        if (key && value) {
+          fragments[key] = decodeURIComponent(value);
+        }
+      }
+      
+      console.log('[EmailVerification] Parsed hash fragments:', fragments);
+    } else {
+      console.log('[EmailVerification] No hash fragment found in URL');
+    }
+    
+    return fragments;
+  };
+
+  // Helper function to check Supabase configuration
+  const checkSupabaseConfig = () => {
+    const hasUrl = !!import.meta.env.VITE_SUPABASE_URL;
+    const hasKey = !!import.meta.env.VITE_SUPABASE_ANON_KEY;
+    
+    console.log('[EmailVerification] Supabase config check:', {
+      hasUrl,
+      hasKey,
+      configured: hasUrl && hasKey
+    });
+    
+    return hasUrl && hasKey;
+  };
+
   useEffect(() => {
     const handleVerification = async () => {
       try {
         setMessage('Processing email verification...');
         
-        // Check for any error parameters in the URL first
+        // First, check if Supabase is properly configured
+        if (!checkSupabaseConfig()) {
+          console.error('[EmailVerification] Supabase not configured');
+          setStatus('error');
+          setErrorDetails({
+            type: 'Configuration Error',
+            description: 'Supabase is not properly configured.',
+            suggestions: [
+              'Add VITE_SUPABASE_URL to your .env file',
+              'Add VITE_SUPABASE_ANON_KEY to your .env file',
+              'Restart the development server after adding environment variables',
+              'Contact support if you continue to have issues'
+            ]
+          });
+          setMessage('Configuration Error: Supabase not configured');
+          return;
+        }
+        
+        // Check for error parameters in URL first
         const error = searchParams.get('error');
         const errorCode = searchParams.get('error_code');
         const errorDescription = searchParams.get('error_description');
         
-        console.log('[EmailVerification] URL params:', Object.fromEntries(searchParams));
+        console.log('[EmailVerification] URL search params:', Object.fromEntries(searchParams));
+        
+        // Extract hash fragments for additional auth data
+        const hashFragments = extractHashFragments();
         
         // If there's an error parameter, handle it immediately
         if (error) {
@@ -106,10 +168,142 @@ export const EmailVerificationHandler: React.FC = () => {
           return;
         }
 
-        // No explicit error in URL - let Supabase handle the session automatically
-        console.log('[EmailVerification] No error parameters found, waiting for Supabase to handle session...');
-        setStatus('waiting-for-auth');
-        setMessage('Email verification in progress...');
+        // Check for hash fragment authentication data
+        if (hashFragments.access_token || hashFragments.refresh_token) {
+          console.log('[EmailVerification] Found auth tokens in hash fragment');
+          setMessage('Processing authentication tokens...');
+          
+          try {
+            // Let Supabase handle the session from the hash fragment
+            const { data, error: sessionError } = await supabase.auth.getSession();
+            
+            console.log('[EmailVerification] Session check after hash fragment:', {
+              hasSession: !!data.session,
+              error: !!sessionError
+            });
+            
+            if (sessionError) {
+              console.error('[EmailVerification] Session error:', sessionError);
+              throw sessionError;
+            }
+            
+            if (data.session) {
+              console.log('[EmailVerification] Session established from hash fragment');
+              setStatus('waiting-for-auth');
+              setMessage('Email verified! Setting up your account...');
+              return;
+            }
+          } catch (err: any) {
+            console.error('[EmailVerification] Error processing hash fragment:', err);
+            setStatus('error');
+            setErrorDetails({
+              type: 'Token Processing Error',
+              description: 'Failed to process authentication tokens from email verification.',
+              suggestions: [
+                'Try refreshing the page',
+                'Request a new verification email',
+                'Try opening the link in a different browser',
+                'Contact support if the issue persists'
+              ]
+            });
+            setMessage('Failed to process verification tokens');
+            return;
+          }
+        }
+
+        // Check for verification code in URL parameters
+        const code = searchParams.get('code');
+        
+        if (code) {
+          console.log('[EmailVerification] Found verification code in URL');
+          setMessage('Processing verification code...');
+          
+          try {
+            const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+            
+            console.log('[EmailVerification] Code exchange result:', {
+              hasSession: !!data.session,
+              error: !!exchangeError
+            });
+            
+            if (exchangeError) {
+              console.error('[EmailVerification] Code exchange error:', exchangeError);
+              
+              let errorType = 'Verification Failed';
+              let description = exchangeError.message;
+              let suggestions: string[] = [];
+              
+              if (exchangeError.message.includes('expired')) {
+                errorType = 'Verification Link Expired';
+                description = 'This verification link has expired.';
+                suggestions = [
+                  'Verification links expire after 24 hours',
+                  'Request a new verification email',
+                  'Check your email for a more recent verification link'
+                ];
+              } else if (exchangeError.message.includes('invalid')) {
+                errorType = 'Invalid Verification Code';
+                description = 'The verification code is invalid or has already been used.';
+                suggestions = [
+                  'The verification link may have already been used',
+                  'Try signing in if you\'ve already verified your email',
+                  'Request a new verification email if needed'
+                ];
+              } else {
+                suggestions = [
+                  'Try requesting a new verification email',
+                  'Check your spam/junk folder for a more recent email',
+                  'Contact support if the problem persists'
+                ];
+              }
+              
+              setStatus('error');
+              setErrorDetails({
+                type: errorType,
+                description,
+                suggestions
+              });
+              setMessage(`${errorType}: ${description}`);
+              return;
+            }
+            
+            if (data.session) {
+              console.log('[EmailVerification] Session established from code exchange');
+              setStatus('waiting-for-auth');
+              setMessage('Email verified! Setting up your account...');
+              return;
+            }
+          } catch (err: any) {
+            console.error('[EmailVerification] Unexpected error during code exchange:', err);
+            setStatus('error');
+            setErrorDetails({
+              type: 'Verification Error',
+              description: 'An unexpected error occurred during email verification.',
+              suggestions: [
+                'Try refreshing the page',
+                'Request a new verification email',
+                'Contact support if the problem persists'
+              ]
+            });
+            setMessage('Verification failed due to an unexpected error');
+            return;
+          }
+        }
+
+        // If we get here, no verification method was found
+        console.log('[EmailVerification] No verification method found in URL');
+        setStatus('error');
+        setErrorDetails({
+          type: 'Missing Verification Data',
+          description: 'No verification code or authentication tokens found in the URL.',
+          suggestions: [
+            'Make sure you clicked the complete link from your email',
+            'Check if the email link was truncated or broken',
+            'Try copying and pasting the full URL from your email',
+            'Request a new verification email if the link is incomplete'
+          ]
+        });
+        setMessage('Missing verification data. Please check your email for a valid confirmation link.');
 
       } catch (err: any) {
         console.error('[EmailVerification] Unexpected error:', err.message);
@@ -153,7 +347,7 @@ export const EmailVerificationHandler: React.FC = () => {
       }, 1500);
     }
 
-    // If we've been waiting for auth for more than 10 seconds without success, show error
+    // If we've been waiting for auth for more than 15 seconds without success, show error
     if (status === 'waiting-for-auth' && !loading) {
       const timer = setTimeout(() => {
         if (!isAuthenticated) {
@@ -171,7 +365,7 @@ export const EmailVerificationHandler: React.FC = () => {
           });
           setMessage('Verification timeout. The process is taking longer than expected.');
         }
-      }, 10000); // 10 second timeout
+      }, 15000); // 15 second timeout
 
       return () => clearTimeout(timer);
     }
@@ -311,7 +505,9 @@ export const EmailVerificationHandler: React.FC = () => {
               </h4>
               <div className="text-xs text-gray-500 space-y-1">
                 <p>URL: {window.location.href}</p>
-                <p>Parameters: {JSON.stringify(Object.fromEntries(searchParams))}</p>
+                <p>Search Params: {JSON.stringify(Object.fromEntries(searchParams))}</p>
+                <p>Hash Fragment: {window.location.hash || 'None'}</p>
+                <p>Supabase Configured: {checkSupabaseConfig() ? 'Yes' : 'No'}</p>
                 <p>Timestamp: {new Date().toISOString()}</p>
                 <p>User Agent: {navigator.userAgent.substring(0, 100)}...</p>
               </div>

@@ -5,8 +5,18 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 let supabase: any
 
+// Add explicit logging to check if Supabase is configured
+console.log('[Supabase] Environment check:', {
+  hasUrl: !!supabaseUrl,
+  hasKey: !!supabaseAnonKey,
+  url: supabaseUrl ? `${supabaseUrl.substring(0, 20)}...` : 'MISSING',
+  keyLength: supabaseAnonKey ? supabaseAnonKey.length : 0
+});
+
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('Supabase environment variables are missing. Using demo mode.')
+  console.warn('[Supabase] Environment variables are missing. Using demo mode.')
+  console.warn('[Supabase] Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your .env file')
+  
   // Create a mock client for development when Supabase is not configured
   const mockClient = {
     auth: {
@@ -28,7 +38,9 @@ if (!supabaseUrl || !supabaseAnonKey) {
   }
   
   supabase = mockClient
+  console.log('[Supabase] Using mock client - no real database operations will work')
 } else {
+  console.log('[Supabase] Creating real Supabase client')
   supabase = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
       // Configure auth settings for better email verification handling
@@ -38,6 +50,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
       flowType: 'pkce'
     }
   })
+  console.log('[Supabase] Real Supabase client created successfully')
 }
 
 export { supabase }
@@ -80,6 +93,9 @@ export const signUpWithEmail = async (email: string, password: string, name: str
     return { data: null, error: { message: 'Supabase not configured. Please add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your .env file.' } }
   }
   
+  console.log('[signUpWithEmail] Starting signup process for:', email);
+  console.log('[signUpWithEmail] Redirect URL will be:', `${window.location.origin}/verify`);
+  
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
@@ -91,6 +107,21 @@ export const signUpWithEmail = async (email: string, password: string, name: str
       emailRedirectTo: `${window.location.origin}/verify`
     }
   })
+  
+  console.log('[signUpWithEmail] Supabase response:', { data: !!data, error: !!error });
+  if (error) {
+    console.error('[signUpWithEmail] Error details:', error);
+  }
+  if (data) {
+    console.log('[signUpWithEmail] Success data:', {
+      user: !!data.user,
+      session: !!data.session,
+      userId: data.user?.id,
+      userEmail: data.user?.email,
+      emailConfirmed: data.user?.email_confirmed_at
+    });
+  }
+  
   return { data, error }
 }
 
@@ -99,10 +130,18 @@ export const signInWithEmail = async (email: string, password: string) => {
     return { data: null, error: { message: 'Supabase not configured. Please add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your .env file.' } }
   }
   
+  console.log('[signInWithEmail] Starting signin process for:', email);
+  
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password
   })
+  
+  console.log('[signInWithEmail] Supabase response:', { data: !!data, error: !!error });
+  if (error) {
+    console.error('[signInWithEmail] Error details:', error);
+  }
+  
   return { data, error }
 }
 
