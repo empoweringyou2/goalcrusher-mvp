@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { CheckCircle, AlertCircle, Loader2, RefreshCw, Info, ExternalLink } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { CheckCircle, AlertCircle, Loader2, RefreshCw, Info, ExternalLink, Globe } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
 export const EmailVerificationHandler: React.FC = () => {
@@ -18,11 +17,11 @@ export const EmailVerificationHandler: React.FC = () => {
   } | null>(null);
 
   useEffect(() => {
-    const verifyEmail = async () => {
+    const handleVerification = async () => {
       try {
         setMessage('Processing email verification...');
         
-        // First, check for any error parameters in the URL
+        // Check for any error parameters in the URL first
         const error = searchParams.get('error');
         const errorCode = searchParams.get('error_code');
         const errorDescription = searchParams.get('error_description');
@@ -106,112 +105,11 @@ export const EmailVerificationHandler: React.FC = () => {
           setMessage(`${errorType}: ${description}`);
           return;
         }
-        
-        // Extract the verification code from URL
-        const code = searchParams.get('code');
-        
-        console.log('[EmailVerification] Verification code found:', !!code);
 
-        if (!code) {
-          console.error('[EmailVerification] Missing verification code in URL');
-          setStatus('error');
-          setErrorDetails({
-            type: 'Missing Verification Code',
-            description: 'No verification code was found in the URL.',
-            suggestions: [
-              'Make sure you clicked the complete link from your email',
-              'Check if the email link was truncated or broken',
-              'Try copying and pasting the full URL from your email',
-              'Request a new verification email if the link is incomplete'
-            ]
-          });
-          setMessage('Missing verification code. Please check your email for a valid confirmation link.');
-          return;
-        }
-
-        setMessage('Exchanging verification code...');
-        console.log('[EmailVerification] Attempting to exchange code for session...');
-        
-        // Exchange the code for a session
-        const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-        console.log('[Exchange Result]', data, exchangeError);
-        
-        if (exchangeError) {
-          console.error('[EmailVerification] Verification failed:', exchangeError.message);
-          setStatus('error');
-          
-          // Parse exchange errors
-          let errorType = 'Verification Failed';
-          let description = exchangeError.message;
-          let suggestions: string[] = [];
-          
-          if (exchangeError.message.includes('expired')) {
-            errorType = 'Verification Link Expired';
-            description = 'This verification link has expired.';
-            suggestions = [
-              'Verification links expire after 24 hours',
-              'Request a new verification email',
-              'Check your email for a more recent verification link'
-            ];
-          } else if (exchangeError.message.includes('invalid')) {
-            errorType = 'Invalid Verification Code';
-            description = 'The verification code is invalid or has already been used.';
-            suggestions = [
-              'The verification link may have already been used',
-              'Try signing in if you\'ve already verified your email',
-              'Request a new verification email if needed'
-            ];
-          } else if (exchangeError.message.includes('not found')) {
-            errorType = 'Verification Code Not Found';
-            description = 'The verification code was not found in the system.';
-            suggestions = [
-              'The verification link may be too old',
-              'Request a new verification email',
-              'Make sure you\'re using the most recent verification link'
-            ];
-          } else {
-            suggestions = [
-              'Try requesting a new verification email',
-              'Check your spam/junk folder for a more recent email',
-              'Contact support if the problem persists'
-            ];
-          }
-          
-          setErrorDetails({
-            type: errorType,
-            description,
-            suggestions
-          });
-          
-          setMessage(`${errorType}: ${description}`);
-          return;
-        }
-
-        if (data.session) {
-          console.log('[EmailVerification] Session established:', data.session.user.email);
-          
-          // Check session immediately after exchange
-          const sessionResponse = await supabase.auth.getSession();
-          console.log('[Post-Exchange Session]', sessionResponse.data.session);
-          
-          setStatus('waiting-for-auth');
-          setMessage('Email verified! Setting up your account...');
-          
-        } else {
-          console.error('[EmailVerification] No session returned after code exchange');
-          setStatus('error');
-          setErrorDetails({
-            type: 'Session Creation Failed',
-            description: 'Email verification succeeded but no user session was created.',
-            suggestions: [
-              'Try signing in manually with your email and password',
-              'Clear your browser cache and cookies',
-              'Try again in an incognito/private browser window',
-              'Contact support if the problem persists'
-            ]
-          });
-          setMessage('Verification completed but no session was created. Please try signing in manually.');
-        }
+        // No explicit error in URL - let Supabase handle the session automatically
+        console.log('[EmailVerification] No error parameters found, waiting for Supabase to handle session...');
+        setStatus('waiting-for-auth');
+        setMessage('Email verification in progress...');
 
       } catch (err: any) {
         console.error('[EmailVerification] Unexpected error:', err.message);
@@ -230,7 +128,7 @@ export const EmailVerificationHandler: React.FC = () => {
       }
     };
 
-    verifyEmail();
+    handleVerification();
   }, [searchParams]);
 
   // Monitor authentication state and redirect when ready
@@ -254,6 +152,29 @@ export const EmailVerificationHandler: React.FC = () => {
         navigate('/', { replace: true });
       }, 1500);
     }
+
+    // If we've been waiting for auth for more than 10 seconds without success, show error
+    if (status === 'waiting-for-auth' && !loading) {
+      const timer = setTimeout(() => {
+        if (!isAuthenticated) {
+          console.log('[EmailVerification] Timeout waiting for authentication');
+          setStatus('error');
+          setErrorDetails({
+            type: 'Verification Timeout',
+            description: 'Email verification is taking longer than expected.',
+            suggestions: [
+              'Try refreshing the page to retry verification',
+              'Check if you opened the link in your main browser (Chrome, Safari, etc.)',
+              'Avoid opening links in email app previews or in-app browsers',
+              'Request a new verification email if the issue persists'
+            ]
+          });
+          setMessage('Verification timeout. The process is taking longer than expected.');
+        }
+      }, 10000); // 10 second timeout
+
+      return () => clearTimeout(timer);
+    }
   }, [status, isAuthenticated, user, loading, navigate]);
 
   const handleManualRedirect = () => {
@@ -262,9 +183,7 @@ export const EmailVerificationHandler: React.FC = () => {
   };
 
   const handleRetry = () => {
-    setStatus('verifying');
-    setMessage('Retrying verification...');
-    setErrorDetails(null);
+    console.log('[EmailVerification] Retry triggered - reloading page');
     window.location.reload();
   };
 
@@ -367,6 +286,23 @@ export const EmailVerificationHandler: React.FC = () => {
               </div>
             )}
 
+            {/* Browser Compatibility Warning */}
+            <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4 mb-6 text-left">
+              <div className="flex items-start gap-3">
+                <Globe className="w-5 h-5 text-yellow-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <h4 className="text-yellow-400 font-medium mb-2 text-sm">Browser Compatibility Tip</h4>
+                  <p className="text-gray-300 text-sm mb-2">
+                    Email verification links work best when opened in your main browser (Chrome, Safari, Firefox, Edge).
+                  </p>
+                  <p className="text-gray-400 text-xs">
+                    Avoid opening links in email app previews, in-app browsers (Instagram, LinkedIn, etc.), 
+                    or restricted browser environments as they may block the verification process.
+                  </p>
+                </div>
+              </div>
+            </div>
+
             {/* Debug Information */}
             <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 mb-6 text-left">
               <h4 className="text-gray-300 font-medium mb-2 text-sm flex items-center gap-2">
@@ -377,23 +313,24 @@ export const EmailVerificationHandler: React.FC = () => {
                 <p>URL: {window.location.href}</p>
                 <p>Parameters: {JSON.stringify(Object.fromEntries(searchParams))}</p>
                 <p>Timestamp: {new Date().toISOString()}</p>
+                <p>User Agent: {navigator.userAgent.substring(0, 100)}...</p>
               </div>
             </div>
 
             <div className="space-y-3">
               <button
-                onClick={handleRequestNewEmail}
-                className="w-full bg-yellow-400 text-black px-6 py-3 rounded-lg font-semibold hover:bg-yellow-300 transition-colors"
-              >
-                Request New Verification Email
-              </button>
-              
-              <button
                 onClick={handleRetry}
-                className="w-full bg-gray-800 text-white px-6 py-3 rounded-lg font-medium hover:bg-gray-700 transition-colors border border-gray-700 flex items-center gap-2 justify-center"
+                className="w-full bg-yellow-400 text-black px-6 py-3 rounded-lg font-semibold hover:bg-yellow-300 transition-colors flex items-center gap-2 justify-center"
               >
                 <RefreshCw className="w-4 h-4" />
                 Try Again
+              </button>
+              
+              <button
+                onClick={handleRequestNewEmail}
+                className="w-full bg-gray-800 text-white px-6 py-3 rounded-lg font-medium hover:bg-gray-700 transition-colors border border-gray-700"
+              >
+                Request New Verification Email
               </button>
               
               <button
