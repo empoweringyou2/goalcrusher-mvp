@@ -7,11 +7,11 @@
 1. Go to your Supabase Dashboard
 2. Navigate to Authentication > Settings
 3. Under "Site URL", make sure it's set to your development URL:
-   - For local development: `http://localhost:5173`
+   - For local development: `http://localhost:5174`
    - For production: your actual domain
 
 4. Under "Redirect URLs", add these URLs:
-   - `http://localhost:5173/auth/callback` (for development)
+   - `http://localhost:5174/auth/callback` (for development)
    - `https://yourdomain.com/auth/callback` (for production)
 
 ### 2. Enable Google Provider
@@ -31,7 +31,7 @@
 
 6. **IMPORTANT: Configure JavaScript Origins**
    Add these to "Authorized JavaScript origins":
-   - `http://localhost:5173` (for development)
+   - `http://localhost:5174` (for development)
    - `https://yourdomain.com` (for production)
 
 7. **Configure Redirect URIs**
@@ -51,8 +51,8 @@
 3. In the "Authorized JavaScript origins" section, click "ADD URI"
 4. Add these URIs one by one:
    ```
-   http://localhost:5173
-   http://127.0.0.1:5173
+   http://localhost:5174
+   http://127.0.0.1:5174
    https://yourdomain.com (when you deploy)
    ```
 
@@ -117,8 +117,8 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 
 4. **"origin_mismatch" or "JavaScript origins" error**:
    - **This is your current issue!**
-   - Add `http://localhost:5173` to "Authorized JavaScript origins" in Google Console
-   - Also add `http://127.0.0.1:5173` as a backup
+   - Add `http://localhost:5174` to "Authorized JavaScript origins" in Google Console
+   - Also add `http://127.0.0.1:5174` as a backup
    - Make sure there are no trailing slashes
 
 5. **CORS errors**:
@@ -135,13 +135,13 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 
 ### Quick Fix for Current Issue:
 
-The "refusing to connect" error is likely because Google doesn't recognize `http://localhost:5173` as an authorized origin. Here's what to do:
+The "refusing to connect" error is likely because Google doesn't recognize `http://localhost:5174` as an authorized origin. Here's what to do:
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
 2. Navigate to "APIs & Services" > "Credentials"
 3. Click on your OAuth 2.0 Client ID
 4. Under "Authorized JavaScript origins", click "ADD URI"
-5. Add: `http://localhost:5173`
+5. Add: `http://localhost:5174`
 6. Click "SAVE"
 7. Wait a few minutes for changes to propagate
 8. Try signing in again
