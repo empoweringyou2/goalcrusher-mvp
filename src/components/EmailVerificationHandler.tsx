@@ -2,11 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { CheckCircle, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../hooks/useAuth';
 
 export const EmailVerificationHandler: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const [status, setStatus] = useState<'verifying' | 'success' | 'error'>('verifying');
+  const { isAuthenticated, user, loading } = useAuth();
+  const [status, setStatus] = useState<'verifying' | 'success' | 'error' | 'waiting-for-auth'>('verifying');
   const [message, setMessage] = useState('Verifying your email...');
 
   useEffect(() => {
@@ -24,17 +26,13 @@ export const EmailVerificationHandler: React.FC = () => {
           console.error('[EmailVerification] Missing verification code in URL');
           setStatus('error');
           setMessage('Missing verification code. Please check your email for a valid confirmation link.');
-          // Redirect to home after showing error
-          setTimeout(() => {
-            navigate('/');
-          }, 3000);
           return;
         }
 
         setMessage('Exchanging verification code...');
         console.log('[EmailVerification] Attempting to exchange code for session...');
         
-        // 🔍 DEBUG STEP 1: Log the exchange result
+        // Exchange the code for a session
         const { data, error } = await supabase.auth.exchangeCodeForSession(code);
         console.log('[Exchange Result]', data, error);
         
@@ -48,93 +46,69 @@ export const EmailVerificationHandler: React.FC = () => {
           } else {
             setMessage('Verification failed. Please try again or request a new verification link.');
           }
-          
-          // Redirect to home after showing error
-          setTimeout(() => {
-            navigate('/');
-          }, 3000);
           return;
         }
 
         if (data.session) {
-          console.log('[EmailVerification] Initial session established:', data.session.user.email);
+          console.log('[EmailVerification] Session established:', data.session.user.email);
           
-          // 🔍 DEBUG STEP 2: Check session immediately after exchange
+          // Check session immediately after exchange
           const sessionResponse = await supabase.auth.getSession();
           console.log('[Post-Exchange Session]', sessionResponse.data.session);
           
-          // Wait until session is available and stable
-          setMessage('Finalizing authentication...');
+          // Check localStorage directly
+          const storedToken = localStorage.getItem('supabase.auth.token');
+          console.log('[Local Storage Token]', !!storedToken);
           
-          const pollSession = setInterval(async () => {
-            const { data: { session } } = await supabase.auth.getSession();
-            
-            console.log('[EmailVerification] Polling session...', session?.user?.email);
-            
-            if (session?.user) {
-              clearInterval(pollSession);
-              console.log('[EmailVerification] Session confirmed, user authenticated');
-              setStatus('success');
-              setMessage('Email verified successfully! Welcome to GoalCrusher!');
-              
-              // Force session refresh and add delay before redirect
-              console.log('[EmailVerification] Session ready, refreshing session and redirecting...');
-              await supabase.auth.getSession();
-              
-              // 🔍 DEBUG STEP 3: Increased delay from 400ms to 1000ms
-              setTimeout(() => {
-                console.log('[EmailVerification] Redirecting to dashboard...');
-                navigate('/', { replace: true });
-              }, 1000);
-            }
-          }, 300);
-
-          // Fallback timeout in case polling doesn't work
-          setTimeout(async () => {
-            clearInterval(pollSession);
-            if (status === 'verifying') {
-              console.log('[EmailVerification] Polling timeout, redirecting anyway');
-              setStatus('success');
-              setMessage('Email verified! Redirecting...');
-              
-              // Force session refresh and add delay before redirect
-              await supabase.auth.getSession();
-              
-              // 🔍 DEBUG STEP 3: Increased delay from 400ms to 1000ms
-              setTimeout(() => {
-                navigate('/', { replace: true });
-              }, 1000);
-            }
-          }, 5000);
+          setStatus('waiting-for-auth');
+          setMessage('Email verified! Setting up your account...');
           
         } else {
           console.error('[EmailVerification] No session returned after code exchange');
           setStatus('error');
           setMessage('Verification completed but no session was created. Please try signing in manually.');
-          
-          // Redirect to home after showing error
-          setTimeout(() => {
-            navigate('/');
-          }, 3000);
         }
 
       } catch (err: any) {
         console.error('[EmailVerification] Unexpected error:', err.message);
         setStatus('error');
         setMessage('Something went wrong during verification. Please try again.');
-        
-        // Redirect to home after showing error
-        setTimeout(() => {
-          navigate('/');
-        }, 3000);
       }
     };
 
     verifyEmail();
-  }, [searchParams, navigate, status]);
+  }, [searchParams]);
+
+  // Monitor authentication state and redirect when ready
+  useEffect(() => {
+    console.log('[EmailVerification] Auth state check:', {
+      status,
+      isAuthenticated,
+      user: !!user,
+      loading
+    });
+
+    // Only proceed if we're waiting for auth and the user is now authenticated
+    if (status === 'waiting-for-auth' && isAuthenticated && user && !loading) {
+      console.log('[EmailVerification] Authentication confirmed, transitioning to success');
+      setStatus('success');
+      setMessage('Welcome to GoalCrusher! Redirecting to your dashboard...');
+      
+      // Final check of localStorage before redirect
+      const storedToken = localStorage.getItem('supabase.auth.token');
+      console.log('[Pre-Redirect Token Check]', !!storedToken);
+      
+      // Short delay to ensure UI updates, then redirect
+      setTimeout(() => {
+        console.log('[EmailVerification] Redirecting to dashboard...');
+        navigate('/', { replace: true });
+      }, 1500);
+    }
+  }, [status, isAuthenticated, user, loading, navigate]);
 
   const handleManualRedirect = () => {
-    navigate('/');
+    console.log('[EmailVerification] Manual redirect triggered');
+    navigate('/', { replace: true });
   };
 
   const handleRetry = () => {
@@ -159,18 +133,18 @@ export const EmailVerificationHandler: React.FC = () => {
           </>
         )}
 
-        {status === 'success' && (
+        {status === 'waiting-for-auth' && (
           <>
-            <CheckCircle className="w-16 h-16 text-green-400 mx-auto mb-6" />
-            <h2 className="text-2xl font-bold text-white mb-4">Email Verified!</h2>
+            <Loader2 className="w-16 h-16 animate-spin text-blue-400 mx-auto mb-6" />
+            <h2 className="text-2xl font-bold text-white mb-4">Almost Ready!</h2>
             <p className="text-gray-400 mb-6">{message}</p>
             
-            <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 mb-6">
-              <p className="text-green-400 text-sm mb-2">
-                🎉 Welcome to GoalCrusher! Your account is now active.
+            <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4 mb-6">
+              <p className="text-blue-400 text-sm mb-2">
+                ✅ Email verification successful!
               </p>
               <p className="text-gray-400 text-xs">
-                Redirecting to dashboard...
+                Setting up your account and preparing your dashboard...
               </p>
             </div>
 
@@ -179,6 +153,30 @@ export const EmailVerificationHandler: React.FC = () => {
               className="bg-yellow-400 text-black px-6 py-3 rounded-lg font-semibold hover:bg-yellow-300 transition-colors"
             >
               Continue to Dashboard
+            </button>
+          </>
+        )}
+
+        {status === 'success' && (
+          <>
+            <CheckCircle className="w-16 h-16 text-green-400 mx-auto mb-6" />
+            <h2 className="text-2xl font-bold text-white mb-4">Welcome to GoalCrusher!</h2>
+            <p className="text-gray-400 mb-6">{message}</p>
+            
+            <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 mb-6">
+              <p className="text-green-400 text-sm mb-2">
+                🎉 Your account is now active and ready to use!
+              </p>
+              <p className="text-gray-400 text-xs">
+                You'll be redirected automatically, or click below to continue.
+              </p>
+            </div>
+
+            <button
+              onClick={handleManualRedirect}
+              className="bg-yellow-400 text-black px-6 py-3 rounded-lg font-semibold hover:bg-yellow-300 transition-colors"
+            >
+              Enter GoalCrusher
             </button>
           </>
         )}

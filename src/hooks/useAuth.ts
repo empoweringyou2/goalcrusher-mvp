@@ -10,25 +10,25 @@ export const useAuth = () => {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    // Get initial session - simplified to only check existing session
+    // Get initial session
     const getInitialSession = async () => {
       try {
-        console.log('Checking for existing session...')
+        console.log('[useAuth] Checking for existing session...')
         const { data: { session }, error } = await supabase.auth.getSession()
         
         if (error) {
-          console.error('Error getting session:', error)
+          console.error('[useAuth] Error getting session:', error)
           setError(error.message)
         } else if (session?.user) {
-          console.log('Found existing session')
+          console.log('[useAuth] Found existing session for:', session.user.email)
           setSupabaseUser(session.user)
           await loadUserProfile(session.user.id)
         } else {
-          console.log('No existing session found')
+          console.log('[useAuth] No existing session found')
         }
         
       } catch (err) {
-        console.error('Error in getInitialSession:', err)
+        console.error('[useAuth] Error in getInitialSession:', err)
         setError('Failed to load session')
       } finally {
         setLoading(false)
@@ -40,18 +40,20 @@ export const useAuth = () => {
     // Listen for auth changes - this will handle session establishment from EmailVerificationHandler
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('[Auth Change]', event, session?.user?.id)
+        console.log('[useAuth] Auth state change:', event, session?.user?.email)
         
         if (session?.user) {
           setSupabaseUser(session.user)
           
           if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+            console.log('[useAuth] Processing sign-in for:', session.user.email)
             await loadUserProfile(session.user.id)
           }
         } else {
           setSupabaseUser(null)
           
           if (event === 'SIGNED_OUT') {
+            console.log('[useAuth] User signed out')
             setUser(null)
           }
         }
@@ -66,18 +68,20 @@ export const useAuth = () => {
   const loadUserProfile = async (userId: string) => {
     try {
       setError(null)
+      console.log('[useAuth] Loading user profile for:', userId)
       
       // Try to get existing user profile
       const { data: existingUser, error: fetchError } = await getUserProfile(userId)
       
       if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 = no rows returned
-        console.error('Error fetching user profile:', fetchError)
+        console.error('[useAuth] Error fetching user profile:', fetchError)
         setError('Failed to load user profile')
         return
       }
 
       if (existingUser) {
         // User profile exists, use it
+        console.log('[useAuth] Found existing user profile:', existingUser.name)
         setUser({
           id: existingUser.id,
           name: existingUser.name,
@@ -93,6 +97,8 @@ export const useAuth = () => {
         const supabaseUserData = supabaseUser
         if (!supabaseUserData) return
 
+        console.log('[useAuth] Creating new user profile for:', supabaseUserData.email)
+
         const name = supabaseUserData.user_metadata?.name || 
                     supabaseUserData.user_metadata?.full_name || 
                     supabaseUserData.email?.split('@')[0] || 
@@ -106,7 +112,7 @@ export const useAuth = () => {
         )
 
         if (createError) {
-          console.error('Error creating user profile:', createError)
+          console.error('[useAuth] Error creating user profile:', createError)
           setError('Failed to create user profile')
           return
         }
@@ -115,6 +121,7 @@ export const useAuth = () => {
         await createUserSettings(userId)
 
         if (newUser) {
+          console.log('[useAuth] Created new user profile:', newUser.name)
           setUser({
             id: newUser.id,
             name: newUser.name,
@@ -128,7 +135,7 @@ export const useAuth = () => {
         }
       }
     } catch (err) {
-      console.error('Error in loadUserProfile:', err)
+      console.error('[useAuth] Error in loadUserProfile:', err)
       setError('Failed to load user data')
     }
   }
