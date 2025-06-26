@@ -10,11 +10,16 @@ export const useAuth = () => {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    console.log('[useAuth] Hook initialized, starting authentication check...')
+    
     // Get initial session
     const getInitialSession = async () => {
+      console.log('[useAuth] getInitialSession function started')
+      
       try {
-        console.log('[useAuth] Checking for existing session...')
+        console.log('[useAuth] About to call supabase.auth.getSession()...')
         const { data: { session }, error } = await supabase.auth.getSession()
+        console.log('[useAuth] getSession() completed. Session:', !!session, 'Error:', !!error)
         
         if (error) {
           console.error('[useAuth] Error getting session:', error)
@@ -31,6 +36,7 @@ export const useAuth = () => {
         console.error('[useAuth] Error in getInitialSession:', err)
         setError('Failed to load session')
       } finally {
+        console.log('[useAuth] getInitialSession finally block - setting loading to false')
         setLoading(false)
       }
     }
@@ -38,9 +44,10 @@ export const useAuth = () => {
     getInitialSession()
 
     // Listen for auth changes - this will handle session establishment from EmailVerificationHandler
+    console.log('[useAuth] Setting up auth state change listener...')
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('[useAuth] Auth state change:', event, session?.user?.email)
+        console.log('[useAuth] Auth state change callback triggered:', event, session?.user?.email)
         
         if (session?.user) {
           setSupabaseUser(session.user)
@@ -58,20 +65,28 @@ export const useAuth = () => {
           }
         }
         
+        console.log('[useAuth] Auth state change callback - setting loading to false')
         setLoading(false)
       }
     )
 
-    return () => subscription.unsubscribe()
+    return () => {
+      console.log('[useAuth] Cleaning up auth state change subscription')
+      subscription.unsubscribe()
+    }
   }, [])
 
   const loadUserProfile = async (userId: string) => {
+    console.log('[useAuth] loadUserProfile started for userId:', userId)
+    
     try {
       setError(null)
       console.log('[useAuth] Loading user profile for:', userId)
       
       // Try to get existing user profile
+      console.log('[useAuth] Calling getUserProfile...')
       const { data: existingUser, error: fetchError } = await getUserProfile(userId)
+      console.log('[useAuth] getUserProfile result - data:', !!existingUser, 'error:', !!fetchError)
       
       if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 = no rows returned
         console.error('[useAuth] Error fetching user profile:', fetchError)
@@ -95,7 +110,10 @@ export const useAuth = () => {
       } else {
         // User profile doesn't exist, create it
         const supabaseUserData = supabaseUser
-        if (!supabaseUserData) return
+        if (!supabaseUserData) {
+          console.log('[useAuth] No supabaseUser data available for profile creation')
+          return
+        }
 
         console.log('[useAuth] Creating new user profile for:', supabaseUserData.email)
 
@@ -104,12 +122,14 @@ export const useAuth = () => {
                     supabaseUserData.email?.split('@')[0] || 
                     'Goal Crusher'
 
+        console.log('[useAuth] Calling createUserProfile...')
         const { data: newUser, error: createError } = await createUserProfile(
           userId,
           supabaseUserData.email!,
           name,
           supabaseUserData.user_metadata?.avatar_url
         )
+        console.log('[useAuth] createUserProfile result - data:', !!newUser, 'error:', !!createError)
 
         if (createError) {
           console.error('[useAuth] Error creating user profile:', createError)
@@ -118,6 +138,7 @@ export const useAuth = () => {
         }
 
         // Create default user settings
+        console.log('[useAuth] Creating default user settings...')
         await createUserSettings(userId)
 
         if (newUser) {
@@ -138,13 +159,18 @@ export const useAuth = () => {
       console.error('[useAuth] Error in loadUserProfile:', err)
       setError('Failed to load user data')
     }
+    
+    console.log('[useAuth] loadUserProfile completed')
   }
 
   const refreshUser = async () => {
+    console.log('[useAuth] refreshUser called')
     if (supabaseUser) {
       await loadUserProfile(supabaseUser.id)
     }
   }
+
+  console.log('[useAuth] Hook render - loading:', loading, 'user:', !!user, 'error:', !!error)
 
   return {
     user,
