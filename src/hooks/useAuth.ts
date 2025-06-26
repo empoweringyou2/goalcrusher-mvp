@@ -37,10 +37,10 @@ export const useAuth = () => {
 
     getInitialSession()
 
-    // Listen for auth changes - this will handle session establishment from AuthCallback/EmailVerificationHandler
+    // Listen for auth changes - this will handle session establishment from EmailVerificationHandler
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth state changed:', event, session?.user?.id)
+        console.log('[Auth Change]', event, session?.user?.id)
         
         if (session?.user) {
           setSupabaseUser(session.user)

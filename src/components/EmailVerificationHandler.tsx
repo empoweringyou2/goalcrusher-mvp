@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { CheckCircle, AlertCircle, Loader2, Mail, RefreshCw } from 'lucide-react';
+import { CheckCircle, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 export const EmailVerificationHandler: React.FC = () => {
   const [status, setStatus] = useState<'verifying' | 'success' | 'error'>('verifying');
   const [message, setMessage] = useState('Verifying your email...');
-  const [countdown, setCountdown] = useState(3);
 
   useEffect(() => {
     const verifyEmail = async () => {
@@ -54,24 +53,45 @@ export const EmailVerificationHandler: React.FC = () => {
         }
 
         if (data.session) {
-          console.log('[EmailVerification] Email verification successful:', data.session.user.email);
-          setStatus('success');
-          setMessage('Email verified successfully! Welcome to GoalCrusher!');
+          console.log('[EmailVerification] Initial session established:', data.session.user.email);
           
-          // Start countdown and redirect after delay
-          const timer = setInterval(() => {
-            setCountdown(prev => {
-              if (prev <= 1) {
-                clearInterval(timer);
-                // Clean up URL and redirect to dashboard
+          // Wait until session is available and stable
+          setMessage('Finalizing authentication...');
+          
+          const pollSession = setInterval(async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            
+            console.log('[EmailVerification] Polling session...', session?.user?.email);
+            
+            if (session?.user) {
+              clearInterval(pollSession);
+              console.log('[EmailVerification] Session confirmed, user authenticated');
+              setStatus('success');
+              setMessage('Email verified successfully! Welcome to GoalCrusher!');
+              
+              // Wait 500ms more for useAuth to pick it up, then redirect
+              setTimeout(() => {
+                console.log('[EmailVerification] Redirecting to dashboard...');
                 window.history.replaceState({}, '', '/');
                 window.location.href = '/';
-                return 0;
-              }
-              return prev - 1;
-            });
-          }, 1000);
+              }, 500);
+            }
+          }, 300);
 
+          // Fallback timeout in case polling doesn't work
+          setTimeout(() => {
+            clearInterval(pollSession);
+            if (status === 'verifying') {
+              console.log('[EmailVerification] Polling timeout, redirecting anyway');
+              setStatus('success');
+              setMessage('Email verified! Redirecting...');
+              setTimeout(() => {
+                window.history.replaceState({}, '', '/');
+                window.location.href = '/';
+              }, 500);
+            }
+          }, 5000);
+          
         } else {
           console.error('[EmailVerification] No session returned after code exchange');
           setStatus('error');
@@ -135,7 +155,7 @@ export const EmailVerificationHandler: React.FC = () => {
                 🎉 Welcome to GoalCrusher! Your account is now active.
               </p>
               <p className="text-gray-400 text-xs">
-                Redirecting in {countdown} second{countdown !== 1 ? 's' : ''}...
+                Redirecting to dashboard...
               </p>
             </div>
 
