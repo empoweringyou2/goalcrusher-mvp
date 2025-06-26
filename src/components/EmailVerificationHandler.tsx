@@ -70,26 +70,31 @@ export const EmailVerificationHandler: React.FC = () => {
               setStatus('success');
               setMessage('Email verified successfully! Welcome to GoalCrusher!');
               
-              // Wait 500ms more for useAuth to pick it up, then redirect
+              // Force session refresh and add delay before redirect
+              console.log('[EmailVerification] Session ready, refreshing session and redirecting...');
+              await supabase.auth.getSession();
               setTimeout(() => {
                 console.log('[EmailVerification] Redirecting to dashboard...');
                 window.history.replaceState({}, '', '/');
                 window.location.href = '/';
-              }, 500);
+              }, 400);
             }
           }, 300);
 
           // Fallback timeout in case polling doesn't work
-          setTimeout(() => {
+          setTimeout(async () => {
             clearInterval(pollSession);
             if (status === 'verifying') {
               console.log('[EmailVerification] Polling timeout, redirecting anyway');
               setStatus('success');
               setMessage('Email verified! Redirecting...');
+              
+              // Force session refresh and add delay before redirect
+              await supabase.auth.getSession();
               setTimeout(() => {
                 window.history.replaceState({}, '', '/');
                 window.location.href = '/';
-              }, 500);
+              }, 400);
             }
           }, 5000);
           
