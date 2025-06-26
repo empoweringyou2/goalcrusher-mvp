@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { CheckCircle, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 export const EmailVerificationHandler: React.FC = () => {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [status, setStatus] = useState<'verifying' | 'success' | 'error'>('verifying');
   const [message, setMessage] = useState('Verifying your email...');
 
@@ -25,7 +26,7 @@ export const EmailVerificationHandler: React.FC = () => {
           setMessage('Missing verification code. Please check your email for a valid confirmation link.');
           // Redirect to home after showing error
           setTimeout(() => {
-            window.location.href = '/';
+            navigate('/');
           }, 3000);
           return;
         }
@@ -48,7 +49,7 @@ export const EmailVerificationHandler: React.FC = () => {
           
           // Redirect to home after showing error
           setTimeout(() => {
-            window.location.href = '/';
+            navigate('/');
           }, 3000);
           return;
         }
@@ -75,8 +76,7 @@ export const EmailVerificationHandler: React.FC = () => {
               await supabase.auth.getSession();
               setTimeout(() => {
                 console.log('[EmailVerification] Redirecting to dashboard...');
-                window.history.replaceState({}, '', '/');
-                window.location.href = '/';
+                navigate('/', { replace: true });
               }, 400);
             }
           }, 300);
@@ -92,8 +92,7 @@ export const EmailVerificationHandler: React.FC = () => {
               // Force session refresh and add delay before redirect
               await supabase.auth.getSession();
               setTimeout(() => {
-                window.history.replaceState({}, '', '/');
-                window.location.href = '/';
+                navigate('/', { replace: true });
               }, 400);
             }
           }, 5000);
@@ -105,7 +104,7 @@ export const EmailVerificationHandler: React.FC = () => {
           
           // Redirect to home after showing error
           setTimeout(() => {
-            window.location.href = '/';
+            navigate('/');
           }, 3000);
         }
 
@@ -116,16 +115,16 @@ export const EmailVerificationHandler: React.FC = () => {
         
         // Redirect to home after showing error
         setTimeout(() => {
-          window.location.href = '/';
+          navigate('/');
         }, 3000);
       }
     };
 
     verifyEmail();
-  }, [searchParams]);
+  }, [searchParams, navigate, status]);
 
   const handleManualRedirect = () => {
-    window.location.href = '/';
+    navigate('/');
   };
 
   const handleRetry = () => {

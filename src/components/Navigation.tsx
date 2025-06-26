@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Calendar, Target, Trophy, BarChart3, Settings, Wand2, LogOut } from 'lucide-react';
 import { Screen } from '../App';
 import { User, AppConfig } from '../types/user';
@@ -12,21 +13,28 @@ interface NavigationProps {
 }
 
 export const Navigation: React.FC<NavigationProps> = ({ currentScreen, onNavigate, user, appConfig }) => {
+  const navigate = useNavigate();
+  
   const navItems = [
-    { id: 'dashboard', icon: Calendar, label: 'Dashboard' },
-    { id: 'goal-wizard', icon: Wand2, label: 'Goal Wizard' },
-    { id: 'gamification', icon: Trophy, label: 'Achievements' },
-    { id: 'analytics', icon: BarChart3, label: 'Analytics' },
-    { id: 'settings', icon: Settings, label: 'Settings' },
+    { id: 'dashboard', icon: Calendar, label: 'Dashboard', path: '/' },
+    { id: 'goal-wizard', icon: Wand2, label: 'Goal Wizard', path: '/goal-wizard' },
+    { id: 'gamification', icon: Trophy, label: 'Achievements', path: '/gamification' },
+    { id: 'analytics', icon: BarChart3, label: 'Analytics', path: '/analytics' },
+    { id: 'settings', icon: Settings, label: 'Settings', path: '/settings' },
   ];
 
   const handleSignOut = async () => {
     try {
       await signOut();
-      window.location.reload();
+      navigate('/', { replace: true });
     } catch (error) {
       console.error('Error signing out:', error);
     }
+  };
+
+  const handleNavigation = (item: any) => {
+    onNavigate(item.id as Screen);
+    navigate(item.path);
   };
 
   return (
@@ -41,7 +49,7 @@ export const Navigation: React.FC<NavigationProps> = ({ currentScreen, onNavigat
             return (
               <button
                 key={item.id}
-                onClick={() => onNavigate(item.id as Screen)}
+                onClick={() => handleNavigation(item)}
                 className={`flex-1 p-3 flex flex-col items-center gap-1 transition-colors ${
                   isActive 
                     ? 'text-yellow-400 bg-gray-800' 
@@ -78,7 +86,7 @@ export const Navigation: React.FC<NavigationProps> = ({ currentScreen, onNavigat
             return (
               <button
                 key={item.id}
-                onClick={() => onNavigate(item.id as Screen)}
+                onClick={() => handleNavigation(item)}
                 className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors ${
                   isActive 
                     ? 'bg-yellow-400 text-black font-semibold' 

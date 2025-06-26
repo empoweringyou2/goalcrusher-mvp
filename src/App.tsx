@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { Dashboard } from './components/Dashboard';
 import { GoalWizard } from './components/GoalWizard';
@@ -20,27 +21,13 @@ function App() {
   const [authError, setAuthError] = useState<string | null>(null);
   
   const { user, loading, error, isAuthenticated } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   
   const appConfig: AppConfig = {
     betaAccess: true,
     version: '1.0.0-beta'
   };
-
-  // Check if we're handling email verification
-  const currentPath = window.location.pathname;
-  const currentSearch = window.location.search;
-  const currentHash = window.location.hash;
-  
-  const isEmailVerification = currentPath === '/verify' || 
-                              currentPath === '/confirm' ||
-                              currentSearch.includes('type=signup') ||
-                              currentSearch.includes('type=email_confirmation') ||
-                              currentSearch.includes('access_token') ||
-                              currentHash.includes('type=signup') ||
-                              currentHash.includes('type=email_confirmation') ||
-                              currentHash.includes('access_token') ||
-                              currentSearch.includes('code=') ||
-                              currentHash.includes('code=');
 
   // Check if user has completed onboarding
   useEffect(() => {
@@ -53,12 +40,13 @@ function App() {
   }, [isAuthenticated, user]);
 
   const handleLogin = () => {
-    setCurrentScreen('dashboard');
+    navigate('/dashboard');
     setAuthError(null);
   };
 
   const navigateTo = (screen: Screen) => {
     setCurrentScreen(screen);
+    navigate(`/${screen === 'dashboard' ? '' : screen}`);
   };
 
   const handleOnboardingComplete = () => {
@@ -74,11 +62,6 @@ function App() {
   const startOnboardingTutorial = () => {
     setShowOnboarding(true);
   };
-
-  // Handle email verification
-  if (isEmailVerification) {
-    return <EmailVerificationHandler />;
-  }
 
   // Show loading screen while checking auth
   if (loading) {
@@ -116,7 +99,7 @@ function App() {
             <button
               onClick={() => {
                 setAuthError(null);
-                window.location.href = '/';
+                navigate('/');
               }}
               className="w-full bg-gray-800 text-white px-6 py-2 rounded-lg font-medium hover:bg-gray-700 transition-colors border border-gray-700"
             >
@@ -128,17 +111,6 @@ function App() {
     );
   }
 
-  // Show welcome screen if not authenticated
-  if (!isAuthenticated) {
-    return (
-      <WelcomeScreen 
-        onLogin={handleLogin} 
-        onBypassLogin={handleLogin}
-      />
-    );
-  }
-
-  // Main app for authenticated users
   return (
     <div className="min-h-screen bg-black text-white">
       {/* Bolt.new Badge */}
@@ -152,53 +124,79 @@ function App() {
         </a>
       </div>
 
-      <div className="flex flex-col md:flex-row">
-        <Navigation 
-          currentScreen={currentScreen} 
-          onNavigate={navigateTo}
-          user={user}
-          appConfig={appConfig}
-        />
+      <Routes>
+        {/* Email verification route */}
+        <Route path="/verify" element={<EmailVerificationHandler />} />
+        <Route path="/confirm" element={<EmailVerificationHandler />} />
+        <Route path="/auth/callback" element={<EmailVerificationHandler />} />
         
-        <main className="flex-1 md:ml-64">
-          {currentScreen === 'dashboard' && (
-            <Dashboard 
-              onNavigate={navigateTo}
-              user={user}
-              appConfig={appConfig}
+        {/* Main app routes */}
+        <Route path="/*" element={
+          !isAuthenticated ? (
+            <WelcomeScreen 
+              onLogin={handleLogin} 
+              onBypassLogin={handleLogin}
             />
-          )}
-          {currentScreen === 'goal-wizard' && (
-            <GoalWizard 
-              onNavigate={navigateTo}
-              user={user}
-              appConfig={appConfig}
-            />
-          )}
-          {currentScreen === 'gamification' && (
-            <Gamification 
-              user={user}
-              appConfig={appConfig}
-            />
-          )}
-          {currentScreen === 'analytics' && (
-            <Analytics 
-              user={user}
-              appConfig={appConfig}
-            />
-          )}
-          {currentScreen === 'settings' && (
-            <Settings 
-              onStartTutorial={startOnboardingTutorial}
-              user={user}
-              appConfig={appConfig}
-              onUpgradeToPro={() => {/* TODO: Implement */}}
-              onDowngradeToFree={() => {/* TODO: Implement */}}
-              onEndBeta={() => {/* TODO: Implement */}}
-            />
-          )}
-        </main>
-      </div>
+          ) : (
+            <div className="flex flex-col md:flex-row">
+              <Navigation 
+                currentScreen={currentScreen} 
+                onNavigate={navigateTo}
+                user={user}
+                appConfig={appConfig}
+              />
+              
+              <main className="flex-1 md:ml-64">
+                <Routes>
+                  <Route path="/" element={
+                    <Dashboard 
+                      onNavigate={navigateTo}
+                      user={user}
+                      appConfig={appConfig}
+                    />
+                  } />
+                  <Route path="/dashboard" element={
+                    <Dashboard 
+                      onNavigate={navigateTo}
+                      user={user}
+                      appConfig={appConfig}
+                    />
+                  } />
+                  <Route path="/goal-wizard" element={
+                    <GoalWizard 
+                      onNavigate={navigateTo}
+                      user={user}
+                      appConfig={appConfig}
+                    />
+                  } />
+                  <Route path="/gamification" element={
+                    <Gamification 
+                      user={user}
+                      appConfig={appConfig}
+                    />
+                  } />
+                  <Route path="/analytics" element={
+                    <Analytics 
+                      user={user}
+                      appConfig={appConfig}
+                    />
+                  } />
+                  <Route path="/settings" element={
+                    <Settings 
+                      onStartTutorial={startOnboardingTutorial}
+                      user={user}
+                      appConfig={appConfig}
+                      onUpgradeToPro={() => {/* TODO: Implement */}}
+                      onDowngradeToFree={() => {/* TODO: Implement */}}
+                      onEndBeta={() => {/* TODO: Implement */}}
+                    />
+                  } />
+                </Routes>
+              </main>
+            </div>
+          )
+        } />
+      </Routes>
 
       {/* Onboarding Tutorial */}
       {showOnboarding && (
