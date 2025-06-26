@@ -20,7 +20,7 @@ function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   
-  const { user, loading, error, isAuthenticated, loadGuestUser } = useAuth();
+  const { user, loading, error, isAuthenticated } = useAuth();
   
   const appConfig: AppConfig = {
     betaAccess: true,
@@ -158,12 +158,11 @@ function App() {
       <WelcomeScreen 
         onLogin={handleLogin} 
         onBypassLogin={handleLogin}
-        loadGuestUser={loadGuestUser}
       />
     );
   }
 
-  // Main app for authenticated users (including guests)
+  // Main app for authenticated users
   return (
     <div className="min-h-screen bg-black text-white">
       {/* Bolt.new Badge */}
@@ -231,13 +230,6 @@ function App() {
           onComplete={handleOnboardingComplete}
           onSkip={handleOnboardingSkip}
         />
-      )}
-
-      {/* Guest Mode Indicator */}
-      {user?.email?.includes('guest-') && (
-        <div className="fixed bottom-4 left-4 bg-blue-400/20 border border-blue-400/40 text-blue-400 px-3 py-2 rounded-lg text-sm font-medium z-50">
-          👤 Guest Mode - Your progress is saved locally
-        </div>
       )}
     </div>
   );

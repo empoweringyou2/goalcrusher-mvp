@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { User as SupabaseUser } from '@supabase/supabase-js'
-import { supabase, getUserProfile, createUserProfile, createUserSettings, getGuestUser, clearGuestUser } from '../lib/supabase'
+import { supabase, getUserProfile, createUserProfile, createUserSettings } from '../lib/supabase'
 import { User } from '../types/user'
 
 export const useAuth = () => {
@@ -46,8 +46,6 @@ export const useAuth = () => {
           setSupabaseUser(session.user)
           
           if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-            // Clear any guest user data when signing in with real account
-            clearGuestUser()
             await loadUserProfile(session.user.id)
           }
         } else {
@@ -64,36 +62,6 @@ export const useAuth = () => {
 
     return () => subscription.unsubscribe()
   }, [])
-
-  // New function to explicitly load guest user (called from WelcomeScreen)
-  const loadGuestUser = async (guestUserId: string) => {
-    try {
-      const { data: guestUser, error } = await getGuestUser(guestUserId)
-      
-      if (error || !guestUser) {
-        console.error('Error loading guest user:', error)
-        clearGuestUser()
-        return false
-      }
-
-      console.log('Guest user loaded:', guestUser)
-      setUser({
-        id: guestUser.id,
-        name: guestUser.name,
-        email: guestUser.email,
-        plan: guestUser.plan,
-        avatar: guestUser.avatar,
-        level: 1,
-        xp: 0,
-        joinDate: new Date(guestUser.created_at)
-      })
-      return true
-    } catch (err) {
-      console.error('Error loading guest user:', err)
-      clearGuestUser()
-      return false
-    }
-  }
 
   const loadUserProfile = async (userId: string) => {
     try {
@@ -177,7 +145,6 @@ export const useAuth = () => {
     loading,
     error,
     refreshUser,
-    loadGuestUser,
     isAuthenticated: !!user
   }
 }
