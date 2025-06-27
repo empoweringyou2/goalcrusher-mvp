@@ -230,7 +230,7 @@ export const createUserProfile = async (userId: string, email: string, name: str
       avatar: avatar || '🧙‍♂️',
       plan: 'free',
       beta_access: true,
-      user_type: 'registered'
+      user_type: 'registered' // Always set to registered (no more guest users)
     };
 
     console.log('[createUserProfile] User data to insert:', userData);
@@ -424,7 +424,7 @@ export const createUserSettings = async (userId: string) => {
   }
 }
 
-// User settings functions (moved from taskUtils.ts)
+// User settings functions
 export interface UserSettings {
   accountability_type: 'self' | 'ai' | 'partner' | 'group';
   completion_method_setting: 'user' | 'ai' | 'external';
