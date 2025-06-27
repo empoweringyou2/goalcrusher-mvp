@@ -113,17 +113,6 @@ function App() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      {/* Bolt.new Badge */}
-      <div className="fixed top-4 right-4 z-50">
-        <a href="https://bolt.new/?rid=os72mi" target="_blank" rel="noopener noreferrer" 
-           className="block transition-all duration-300 hover:shadow-2xl">
-          <img src="https://storage.bolt.army/white_circle_360x360.png" 
-               alt="Built with Bolt.new badge" 
-               className="w-20 h-20 md:w-28 md:h-28 rounded-full shadow-lg bolt-badge bolt-badge-intro"
-               onAnimationEnd={(e) => e.currentTarget.classList.add('animated')} />
-        </a>
-      </div>
-
       <Routes>
         {/* Email verification route */}
         <Route path="/verify" element={<EmailVerificationHandler />} />
@@ -138,6 +127,16 @@ function App() {
             />
           ) : (
             <div className="flex flex-col md:flex-row">
+              {/* Small Bolt.new Badge for authenticated users */}
+              <div className="fixed top-1 right-1 z-50">
+                <a href="https://bolt.new/?rid=os72mi" target="_blank" rel="noopener noreferrer" 
+                   className="block transition-all duration-300 hover:shadow-lg">
+                  <img src="https://storage.bolt.army/white_circle_360x360.png" 
+                       alt="Built with Bolt.new badge" 
+                       className="w-8 h-8 md:w-10 md:h-10 rounded-full shadow-md opacity-60 hover:opacity-100 transition-opacity" />
+                </a>
+              </div>
+
               <Navigation 
                 currentScreen={currentScreen} 
                 onNavigate={navigateTo}
