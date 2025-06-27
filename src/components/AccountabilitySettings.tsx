@@ -1,22 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, Users, MessageCircle, Clock, AlertCircle, CheckCircle } from 'lucide-react';
+import type { UserSettings } from '../lib/taskUtils';
 
 interface AccountabilitySettingsProps {
   userId: string;
-  onSettingsChange?: (settings: AccountabilitySettings) => void;
-}
-
-interface AccountabilitySettings {
-  accountability_type: 'self' | 'ai' | 'partner' | 'group';
-  completion_method_setting: 'user' | 'ai' | 'external';
-  default_proof_time_minutes: number;
+  onSettingsChange?: (settings: UserSettings) => void;
 }
 
 export const AccountabilitySettings: React.FC<AccountabilitySettingsProps> = ({
   userId,
   onSettingsChange
 }) => {
-  const [settings, setSettings] = useState<AccountabilitySettings>({
+  const [settings, setSettings] = useState<UserSettings>({
     accountability_type: 'self',
     completion_method_setting: 'user',
     default_proof_time_minutes: 10
@@ -69,7 +64,7 @@ export const AccountabilitySettings: React.FC<AccountabilitySettingsProps> = ({
     }
   };
 
-  const handleSettingChange = (key: keyof AccountabilitySettings, value: any) => {
+  const handleSettingChange = (key: keyof UserSettings, value: any) => {
     setSettings(prev => ({
       ...prev,
       [key]: value

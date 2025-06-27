@@ -46,7 +46,8 @@ import {
 import { Screen } from '../App';
 import { User, AppConfig } from '../types/user';
 import { TaskCompletionModal } from './TaskCompletionModal';
-import { getUserSettings, UserSettings } from '../lib/taskUtils';
+import { getUserSettings } from '../lib/taskUtils';
+import type { UserSettings } from '../lib/taskUtils';
 
 interface DashboardProps {
   onNavigate: (screen: Screen) => void;

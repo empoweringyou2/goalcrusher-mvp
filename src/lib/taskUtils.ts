@@ -1,6 +1,7 @@
-import { getUserSettings, updateUserSettings, UserSettings } from './supabase';
+import { getUserSettings, updateUserSettings } from './supabase';
+import type { UserSettings } from './supabase';
 
-export { UserSettings };
+export type { UserSettings };
 
 export const scheduleFollowUpEvent = async (
   userId: string, 

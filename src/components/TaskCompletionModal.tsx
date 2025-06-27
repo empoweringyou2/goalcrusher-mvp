@@ -14,6 +14,7 @@ import {
   Bell
 } from 'lucide-react';
 import { markTaskComplete } from '../lib/supabase';
+import type { UserSettings } from '../lib/taskUtils';
 
 interface Task {
   id: string;
@@ -21,12 +22,6 @@ interface Task {
   description?: string;
   category: string;
   xp_reward: number;
-}
-
-interface UserSettings {
-  accountability_type: 'self' | 'ai' | 'partner' | 'group';
-  completion_method_setting: 'user' | 'ai' | 'external';
-  default_proof_time_minutes: number;
 }
 
 interface TaskCompletionModalProps {
