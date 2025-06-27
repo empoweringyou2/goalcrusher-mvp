@@ -162,6 +162,49 @@ export const resetPassword = async (email: string) => {
 }
 
 // Database helper functions
+export const updateUserProfileIdByEmail = async (email: string, newUserId: string) => {
+  console.log('[updateUserProfileIdByEmail] Function called with:', { email, newUserId });
+
+  if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+    console.warn('[updateUserProfileIdByEmail] Supabase not configured, returning mock error');
+    return { data: null, error: { message: 'Supabase not configured' } }
+  }
+
+  try {
+    console.log('[updateUserProfileIdByEmail] Attempting to update user ID for email:', email);
+    
+    const { data, error } = await supabase
+      .from('users')
+      .update({ id: newUserId })
+      .eq('email', email)
+      .select()
+      .single();
+
+    console.log('[updateUserProfileIdByEmail] Update result:', {
+      success: !!data,
+      hasError: !!error,
+      errorCode: error?.code,
+      errorMessage: error?.message
+    });
+
+    if (error) {
+      console.error('[updateUserProfileIdByEmail] Error details:', error);
+    }
+
+    return { data, error };
+
+  } catch (err: any) {
+    console.error('[updateUserProfileIdByEmail] Unexpected error:', err);
+    return { 
+      data: null, 
+      error: { 
+        message: `Unexpected error: ${err?.message || 'Unknown error'}`,
+        originalError: err
+      } 
+    };
+  }
+}
+
 export const createUserProfile = async (userId: string, email: string, name: string, avatar?: string) => {
   console.log('[createUserProfile] Function called with parameters:', {
     userId,
@@ -379,6 +422,85 @@ export const createUserSettings = async (userId: string) => {
     };
   }
 }
+
+// User settings functions (moved from taskUtils.ts)
+export interface UserSettings {
+  accountability_type: 'self' | 'ai' | 'partner' | 'group';
+  completion_method_setting: 'user' | 'ai' | 'external';
+  default_proof_time_minutes: number;
+}
+
+export const getUserSettings = async (userId: string): Promise<UserSettings | null> => {
+  try {
+    if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+      // Fallback to localStorage for demo mode
+      const savedSettings = localStorage.getItem(`accountability_settings_${userId}`);
+      if (savedSettings) {
+        return JSON.parse(savedSettings);
+      }
+      return {
+        accountability_type: 'self',
+        completion_method_setting: 'user',
+        default_proof_time_minutes: 10
+      };
+    }
+
+    const { data, error } = await supabase
+      .from('user_settings')
+      .select('accountability_type, completion_method_setting, default_proof_time_minutes')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error fetching user settings:', error);
+      return null;
+    }
+
+    // If no settings found, return default settings
+    if (!data) {
+      return {
+        accountability_type: 'self',
+        completion_method_setting: 'user',
+        default_proof_time_minutes: 10
+      };
+    }
+
+    return data;
+  } catch (err) {
+    console.error('Error in getUserSettings:', err);
+    return null;
+  }
+};
+
+export const updateUserSettings = async (userId: string, settings: Partial<UserSettings>): Promise<boolean> => {
+  try {
+    if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+      // Fallback to localStorage for demo mode
+      const currentSettings = await getUserSettings(userId);
+      const updatedSettings = { ...currentSettings, ...settings };
+      localStorage.setItem(`accountability_settings_${userId}`, JSON.stringify(updatedSettings));
+      return true;
+    }
+
+    const { error } = await supabase
+      .from('user_settings')
+      .update({
+        ...settings,
+        updated_at: new Date().toISOString()
+      })
+      .eq('user_id', userId);
+
+    if (error) {
+      console.error('Error updating user settings:', error);
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    console.error('Error in updateUserSettings:', err);
+    return false;
+  }
+};
 
 // Task management functions
 export const markTaskComplete = async (taskId: string) => {

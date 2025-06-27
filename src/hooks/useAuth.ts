@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { User as SupabaseUser } from '@supabase/supabase-js'
-import { supabase, getUserProfile, createUserProfile, createUserSettings } from '../lib/supabase'
+import { supabase, getUserProfile, createUserProfile, createUserSettings, updateUserProfileIdByEmail, getUserSettings } from '../lib/supabase'
 import { User } from '../types/user'
 
 export const useAuth = () => {
@@ -89,7 +89,7 @@ export const useAuth = () => {
       setError(null)
       console.log('[useAuth] Loading user profile for:', userId)
       
-      // Try to get existing user profile
+      // Step 1: Try to get existing user profile by auth.uid()
       console.log('[useAuth] Calling getUserProfile...')
       const { data: existingUser, error: fetchError } = await getUserProfile(userId)
       console.log('[useAuth] getUserProfile result - data:', !!existingUser, 'error:', !!fetchError)
@@ -101,8 +101,9 @@ export const useAuth = () => {
       }
 
       if (existingUser) {
-        // User profile exists, use it
+        // User profile exists with correct ID, use it
         console.log('[useAuth] Found existing user profile:', existingUser.name)
+        await ensureUserSettingsExist(existingUser.id)
         setUser({
           id: existingUser.id,
           name: existingUser.name,
@@ -113,56 +114,86 @@ export const useAuth = () => {
           xp: 0, // You might want to get this from user_stats table
           joinDate: new Date(existingUser.created_at)
         })
-      } else {
-        // User profile doesn't exist, create it
-        if (!supabaseUserData) {
-          console.error('[useAuth] No supabaseUserData provided for profile creation')
-          setError('Missing user data for profile creation')
-          return
+        return
+      }
+
+      // Step 2: No profile found with auth.uid(), try to create new profile
+      if (!supabaseUserData) {
+        console.error('[useAuth] No supabaseUserData provided for profile creation')
+        setError('Missing user data for profile creation')
+        return
+      }
+
+      console.log('[useAuth] Creating new user profile for:', supabaseUserData.email)
+      console.log('[useAuth] Available user metadata:', supabaseUserData.user_metadata)
+
+      const name = supabaseUserData.user_metadata?.name || 
+                  supabaseUserData.user_metadata?.full_name || 
+                  supabaseUserData.email?.split('@')[0] || 
+                  'Goal Crusher'
+
+      console.log('[useAuth] Extracted name for new user:', name)
+      console.log('[useAuth] Calling createUserProfile...')
+      
+      const { data: newUser, error: createError } = await createUserProfile(
+        userId,
+        supabaseUserData.email!,
+        name,
+        supabaseUserData.user_metadata?.avatar_url
+      )
+      console.log('[useAuth] createUserProfile result - data:', !!newUser, 'error:', !!createError)
+
+      if (createError) {
+        // Step 3: If creation failed due to duplicate email, try to update existing user's ID
+        if (createError.code === '23505' && createError.message?.includes('users_email_key')) {
+          console.log('[useAuth] Duplicate email detected, attempting to update existing user ID...')
+          
+          const { data: updatedUser, error: updateError } = await updateUserProfileIdByEmail(
+            supabaseUserData.email!,
+            userId
+          )
+          
+          if (updateError) {
+            console.error('[useAuth] Error updating user profile ID:', updateError)
+            setError('Failed to synchronize user profile')
+            return
+          }
+
+          if (updatedUser) {
+            console.log('[useAuth] Successfully updated user profile ID:', updatedUser.name)
+            await ensureUserSettingsExist(updatedUser.id)
+            setUser({
+              id: updatedUser.id,
+              name: updatedUser.name,
+              email: updatedUser.email,
+              plan: updatedUser.plan,
+              avatar: updatedUser.avatar,
+              level: 1,
+              xp: 0,
+              joinDate: new Date(updatedUser.created_at)
+            })
+            return
+          }
         }
 
-        console.log('[useAuth] Creating new user profile for:', supabaseUserData.email)
-        console.log('[useAuth] Available user metadata:', supabaseUserData.user_metadata)
+        console.error('[useAuth] Error creating user profile:', createError)
+        setError('Failed to create user profile')
+        return
+      }
 
-        const name = supabaseUserData.user_metadata?.name || 
-                    supabaseUserData.user_metadata?.full_name || 
-                    supabaseUserData.email?.split('@')[0] || 
-                    'Goal Crusher'
-
-        console.log('[useAuth] Extracted name for new user:', name)
-        console.log('[useAuth] Calling createUserProfile...')
-        
-        const { data: newUser, error: createError } = await createUserProfile(
-          userId,
-          supabaseUserData.email!,
-          name,
-          supabaseUserData.user_metadata?.avatar_url
-        )
-        console.log('[useAuth] createUserProfile result - data:', !!newUser, 'error:', !!createError)
-
-        if (createError) {
-          console.error('[useAuth] Error creating user profile:', createError)
-          setError('Failed to create user profile')
-          return
-        }
-
-        // Create default user settings
-        console.log('[useAuth] Creating default user settings...')
-        await createUserSettings(userId)
-
-        if (newUser) {
-          console.log('[useAuth] Created new user profile:', newUser.name)
-          setUser({
-            id: newUser.id,
-            name: newUser.name,
-            email: newUser.email,
-            plan: newUser.plan,
-            avatar: newUser.avatar,
-            level: 1,
-            xp: 0,
-            joinDate: new Date(newUser.created_at)
-          })
-        }
+      if (newUser) {
+        console.log('[useAuth] Created new user profile:', newUser.name)
+        await ensureUserSettingsExist(newUser.id)
+        setUser({
+          id: newUser.id,
+          name: newUser.name,
+          email: newUser.email,
+          plan: newUser.plan,
+          avatar: newUser.avatar,
+          level: 1,
+          xp: 0,
+          joinDate: new Date(newUser.created_at)
+        })
       }
     } catch (err) {
       console.error('[useAuth] Error in loadUserProfile:', err)
@@ -170,6 +201,25 @@ export const useAuth = () => {
     }
     
     console.log('[useAuth] loadUserProfile completed')
+  }
+
+  const ensureUserSettingsExist = async (userId: string) => {
+    console.log('[useAuth] Checking if user settings exist for:', userId)
+    
+    try {
+      const settings = await getUserSettings(userId)
+      
+      if (!settings) {
+        console.log('[useAuth] No user settings found, creating default settings...')
+        await createUserSettings(userId)
+        console.log('[useAuth] Default user settings created')
+      } else {
+        console.log('[useAuth] User settings already exist')
+      }
+    } catch (err) {
+      console.error('[useAuth] Error ensuring user settings exist:', err)
+      // Don't fail the entire auth process if settings creation fails
+    }
   }
 
   const refreshUser = async () => {

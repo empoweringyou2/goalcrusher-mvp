@@ -1,82 +1,6 @@
-import { supabase } from './supabase';
+import { getUserSettings, updateUserSettings, UserSettings } from './supabase';
 
-export interface UserSettings {
-  accountability_type: 'self' | 'ai' | 'partner' | 'group';
-  completion_method_setting: 'user' | 'ai' | 'external';
-  default_proof_time_minutes: number;
-}
-
-export const getUserSettings = async (userId: string): Promise<UserSettings | null> => {
-  try {
-    if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
-      // Fallback to localStorage for demo mode
-      const savedSettings = localStorage.getItem(`accountability_settings_${userId}`);
-      if (savedSettings) {
-        return JSON.parse(savedSettings);
-      }
-      return {
-        accountability_type: 'self',
-        completion_method_setting: 'user',
-        default_proof_time_minutes: 10
-      };
-    }
-
-    const { data, error } = await supabase
-      .from('user_settings')
-      .select('accountability_type, completion_method_setting, default_proof_time_minutes')
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    if (error) {
-      console.error('Error fetching user settings:', error);
-      return null;
-    }
-
-    // If no settings found, return default settings
-    if (!data) {
-      return {
-        accountability_type: 'self',
-        completion_method_setting: 'user',
-        default_proof_time_minutes: 10
-      };
-    }
-
-    return data;
-  } catch (err) {
-    console.error('Error in getUserSettings:', err);
-    return null;
-  }
-};
-
-export const updateUserSettings = async (userId: string, settings: Partial<UserSettings>): Promise<boolean> => {
-  try {
-    if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
-      // Fallback to localStorage for demo mode
-      const currentSettings = await getUserSettings(userId);
-      const updatedSettings = { ...currentSettings, ...settings };
-      localStorage.setItem(`accountability_settings_${userId}`, JSON.stringify(updatedSettings));
-      return true;
-    }
-
-    const { error } = await supabase
-      .from('user_settings')
-      .update({
-        ...settings,
-        updated_at: new Date().toISOString()
-      })
-      .eq('user_id', userId);
-
-    if (error) {
-      console.error('Error updating user settings:', error);
-      return false;
-    }
-
-    return true;
-  } catch (err) {
-    console.error('Error in updateUserSettings:', err);
-    return false;
-  }
-};
+export { UserSettings };
 
 export const scheduleFollowUpEvent = async (
   userId: string, 
@@ -92,6 +16,7 @@ export const scheduleFollowUpEvent = async (
       return true;
     }
 
+    const { supabase } = await import('./supabase');
     const followUpTime = new Date();
     followUpTime.setMinutes(followUpTime.getMinutes() + proofTimeMinutes);
 
@@ -132,3 +57,6 @@ export const getTaskCompletionModalType = (settings: UserSettings): 'user' | 'ai
 export const shouldScheduleFollowUp = (accountabilityType: string): boolean => {
   return accountabilityType !== 'self';
 };
+
+// Re-export the functions from supabase.ts
+export { getUserSettings, updateUserSettings };
