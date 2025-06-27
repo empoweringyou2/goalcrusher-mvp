@@ -4,10 +4,9 @@ import { AuthForm } from './AuthForm';
 
 interface WelcomeScreenProps {
   onLogin: () => void;
-  onBypassLogin: () => void;
 }
 
-export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onLogin, onBypassLogin }) => {
+export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onLogin }) => {
   const [showAuthForm, setShowAuthForm] = useState(false);
 
   if (showAuthForm) {

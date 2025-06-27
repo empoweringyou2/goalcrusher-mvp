@@ -134,8 +134,7 @@ function App() {
         <Route path="/*" element={
           !isAuthenticated ? (
             <WelcomeScreen 
-              onLogin={handleLogin} 
-              onBypassLogin={handleLogin}
+              onLogin={handleLogin}
             />
           ) : (
             <div className="flex flex-col md:flex-row">

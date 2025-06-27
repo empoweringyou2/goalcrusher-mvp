@@ -1,5 +1,11 @@
 import { getUserSettings, updateUserSettings } from './supabase';
-import type { UserSettings } from './supabase';
+
+// User settings interface definition (moved from supabase.ts)
+export interface UserSettings {
+  accountability_type: 'self' | 'ai' | 'partner' | 'group';
+  completion_method_setting: 'user' | 'ai' | 'external';
+  default_proof_time_minutes: number;
+}
 
 export type { UserSettings };
 

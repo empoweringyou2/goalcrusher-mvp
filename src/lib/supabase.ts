@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import type { UserSettings } from './taskUtils'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -229,8 +230,7 @@ export const createUserProfile = async (userId: string, email: string, name: str
       name,
       avatar: avatar || '🧙‍♂️',
       plan: 'free',
-      beta_access: true,
-      user_type: 'registered' // Always set to registered (no more guest users)
+      beta_access: true
     };
 
     console.log('[createUserProfile] User data to insert:', userData);
@@ -292,7 +292,6 @@ export const createUserProfile = async (userId: string, email: string, name: str
         email: data.email,
         name: data.name,
         plan: data.plan,
-        userType: data.user_type,
         createdAt: data.created_at
       });
     }
@@ -342,8 +341,7 @@ export const getUserProfile = async (userId: string) => {
       userData: data ? {
         id: data.id,
         email: data.email,
-        name: data.name,
-        userType: data.user_type
+        name: data.name
       } : null
     });
 
@@ -424,21 +422,10 @@ export const createUserSettings = async (userId: string) => {
   }
 }
 
-// User settings functions
-export interface UserSettings {
-  accountability_type: 'self' | 'ai' | 'partner' | 'group';
-  completion_method_setting: 'user' | 'ai' | 'external';
-  default_proof_time_minutes: number;
-}
-
 export const getUserSettings = async (userId: string): Promise<UserSettings | null> => {
   try {
     if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
-      // Fallback to localStorage for demo mode
-      const savedSettings = localStorage.getItem(`accountability_settings_${userId}`);
-      if (savedSettings) {
-        return JSON.parse(savedSettings);
-      }
+      // Return default settings for demo mode
       return {
         accountability_type: 'self',
         completion_method_setting: 'user',
@@ -476,10 +463,8 @@ export const getUserSettings = async (userId: string): Promise<UserSettings | nu
 export const updateUserSettings = async (userId: string, settings: Partial<UserSettings>): Promise<boolean> => {
   try {
     if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
-      // Fallback to localStorage for demo mode
-      const currentSettings = await getUserSettings(userId);
-      const updatedSettings = { ...currentSettings, ...settings };
-      localStorage.setItem(`accountability_settings_${userId}`, JSON.stringify(updatedSettings));
+      // For demo mode, just return success
+      console.log('Demo mode: would update settings for user', userId, 'with', settings);
       return true;
     }
 
