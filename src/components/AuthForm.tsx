@@ -15,6 +15,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onSuccess }) => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [rateLimitCooldown, setRateLimitCooldown] = useState<number>(0);
+  const [debugInfo, setDebugInfo] = useState<string | null>(null);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -152,6 +153,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onSuccess }) => {
     setLoading(true);
     setError(null);
     setSuccess(null);
+    setDebugInfo(null);
 
     try {
       if (mode === 'forgot') {
@@ -209,6 +211,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onSuccess }) => {
   const handleSocialAuth = async (provider: 'google') => {
     setLoading(true);
     setError(null);
+    setDebugInfo('Initiating Google OAuth...');
 
     try {
       console.log(`[AuthForm] Attempting ${provider} OAuth`);
@@ -217,13 +220,16 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onSuccess }) => {
       if (error) {
         console.error(`[AuthForm] ${provider} OAuth error:`, error);
         setError(parseSupabaseError(error));
+        setDebugInfo(`OAuth Error: ${error.message}`);
       } else {
         console.log(`[AuthForm] ${provider} OAuth initiated successfully`);
+        setDebugInfo('Redirecting to Google...');
         // Note: For OAuth, the redirect will handle success
       }
     } catch (err: any) {
       console.error(`[AuthForm] ${provider} OAuth unexpected error:`, err);
       setError(parseSupabaseError(err));
+      setDebugInfo(`Unexpected error: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -234,6 +240,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onSuccess }) => {
     setError(null);
     setSuccess(null);
     setRateLimitCooldown(0);
+    setDebugInfo(null);
   };
 
   const switchMode = (newMode: AuthMode) => {
@@ -257,6 +264,13 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onSuccess }) => {
           {mode === 'forgot' && 'Enter your email to reset your password'}
         </p>
       </div>
+
+      {/* Debug Info */}
+      {debugInfo && (
+        <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+          <p className="text-blue-400 text-sm">Debug: {debugInfo}</p>
+        </div>
+      )}
 
       {/* Error/Success Messages */}
       {error && (

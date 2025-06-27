@@ -102,6 +102,7 @@ export const signUpWithEmail = async (email: string, password: string, name: str
     options: {
       data: {
         name: name,
+        full_name: name,
         avatar: '🧙‍♂️'
       },
       emailRedirectTo: `${window.location.origin}/verify`

@@ -43,7 +43,7 @@ export const useAuth = () => {
 
     getInitialSession()
 
-    // Listen for auth changes - this will handle session establishment from EmailVerificationHandler
+    // Listen for auth changes
     console.log('[useAuth] Setting up auth state change listener...')
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
@@ -78,7 +78,7 @@ export const useAuth = () => {
 
   const loadUserProfile = async (userId: string, supabaseUserData: SupabaseUser) => {
     console.log('[useAuth] loadUserProfile started for userId:', userId)
-    console.log('[useAuth] supabaseUserData available:', {
+    console.log('[useAuth] supabaseUserData:', {
       hasUserData: !!supabaseUserData,
       email: supabaseUserData?.email,
       hasMetadata: !!supabaseUserData?.user_metadata,
@@ -96,6 +96,14 @@ export const useAuth = () => {
       
       if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 = no rows returned
         console.error('[useAuth] Error fetching user profile:', fetchError)
+        
+        // If it's a permission error, try to create the user
+        if (fetchError.code === 'PGRST301' || fetchError.message?.includes('RLS')) {
+          console.log('[useAuth] RLS error detected, attempting to create user profile...')
+          await createUserProfileFromOAuth(userId, supabaseUserData)
+          return
+        }
+        
         setError('Failed to load user profile')
         return
       }
@@ -110,41 +118,60 @@ export const useAuth = () => {
           email: existingUser.email,
           plan: existingUser.plan,
           avatar: existingUser.avatar,
-          level: 1, // You might want to calculate this from user_stats table
-          xp: 0, // You might want to get this from user_stats table
+          level: 1,
+          xp: 0,
           joinDate: new Date(existingUser.created_at)
         })
         return
       }
 
-      // Step 2: No profile found with auth.uid(), try to create new profile
-      if (!supabaseUserData) {
-        console.error('[useAuth] No supabaseUserData provided for profile creation')
-        setError('Missing user data for profile creation')
-        return
-      }
-
-      console.log('[useAuth] Creating new user profile for:', supabaseUserData.email)
-      console.log('[useAuth] Available user metadata:', supabaseUserData.user_metadata)
-
-      const name = supabaseUserData.user_metadata?.name || 
-                  supabaseUserData.user_metadata?.full_name || 
-                  supabaseUserData.email?.split('@')[0] || 
-                  'Goal Crusher'
-
-      console.log('[useAuth] Extracted name for new user:', name)
-      console.log('[useAuth] Calling createUserProfile...')
+      // Step 2: No profile found, create new one
+      console.log('[useAuth] No existing profile found, creating new user...')
+      await createUserProfileFromOAuth(userId, supabaseUserData)
       
+    } catch (err) {
+      console.error('[useAuth] Error in loadUserProfile:', err)
+      setError('Failed to load user data')
+    }
+    
+    console.log('[useAuth] loadUserProfile completed')
+  }
+
+  const createUserProfileFromOAuth = async (userId: string, supabaseUserData: SupabaseUser) => {
+    console.log('[useAuth] Creating user profile from OAuth data...')
+    
+    if (!supabaseUserData) {
+      console.error('[useAuth] No supabaseUserData provided for profile creation')
+      setError('Missing user data for profile creation')
+      return
+    }
+
+    // Extract name from various possible sources
+    const name = supabaseUserData.user_metadata?.full_name || 
+                supabaseUserData.user_metadata?.name || 
+                supabaseUserData.email?.split('@')[0] || 
+                'Goal Crusher'
+
+    // Extract avatar from OAuth provider
+    const avatar = supabaseUserData.user_metadata?.avatar_url || 
+                  supabaseUserData.user_metadata?.picture || 
+                  '🧙‍♂️'
+
+    console.log('[useAuth] Extracted user data:', { name, email: supabaseUserData.email, avatar })
+
+    try {
+      console.log('[useAuth] Calling createUserProfile...')
       const { data: newUser, error: createError } = await createUserProfile(
         userId,
         supabaseUserData.email!,
         name,
-        supabaseUserData.user_metadata?.avatar_url
+        avatar
       )
+      
       console.log('[useAuth] createUserProfile result - data:', !!newUser, 'error:', !!createError)
 
       if (createError) {
-        // Step 3: If creation failed due to duplicate email, try to update existing user's ID
+        // If creation failed due to duplicate email, try to update existing user's ID
         if (createError.code === '23505' && createError.message?.includes('users_email_key')) {
           console.log('[useAuth] Duplicate email detected, attempting to update existing user ID...')
           
@@ -177,7 +204,7 @@ export const useAuth = () => {
         }
 
         console.error('[useAuth] Error creating user profile:', createError)
-        setError('Failed to create user profile')
+        setError(`Failed to create user profile: ${createError.message}`)
         return
       }
 
@@ -196,11 +223,9 @@ export const useAuth = () => {
         })
       }
     } catch (err) {
-      console.error('[useAuth] Error in loadUserProfile:', err)
-      setError('Failed to load user data')
+      console.error('[useAuth] Error in createUserProfileFromOAuth:', err)
+      setError('Failed to create user profile')
     }
-    
-    console.log('[useAuth] loadUserProfile completed')
   }
 
   const ensureUserSettingsExist = async (userId: string) => {
