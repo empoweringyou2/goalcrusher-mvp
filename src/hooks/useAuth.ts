@@ -27,7 +27,7 @@ export const useAuth = () => {
         } else if (session?.user) {
           console.log('[useAuth] Found existing session for:', session.user.email)
           setSupabaseUser(session.user)
-          await loadUserProfile(session.user.id)
+          await loadUserProfile(session.user.id, session.user)
         } else {
           console.log('[useAuth] No existing session found')
         }
@@ -54,7 +54,7 @@ export const useAuth = () => {
           
           if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
             console.log('[useAuth] Processing sign-in for:', session.user.email)
-            await loadUserProfile(session.user.id)
+            await loadUserProfile(session.user.id, session.user)
           }
         } else {
           setSupabaseUser(null)
@@ -76,8 +76,14 @@ export const useAuth = () => {
     }
   }, [])
 
-  const loadUserProfile = async (userId: string) => {
+  const loadUserProfile = async (userId: string, supabaseUserData: SupabaseUser) => {
     console.log('[useAuth] loadUserProfile started for userId:', userId)
+    console.log('[useAuth] supabaseUserData available:', {
+      hasUserData: !!supabaseUserData,
+      email: supabaseUserData?.email,
+      hasMetadata: !!supabaseUserData?.user_metadata,
+      metadataKeys: supabaseUserData?.user_metadata ? Object.keys(supabaseUserData.user_metadata) : []
+    })
     
     try {
       setError(null)
@@ -109,20 +115,23 @@ export const useAuth = () => {
         })
       } else {
         // User profile doesn't exist, create it
-        const supabaseUserData = supabaseUser
         if (!supabaseUserData) {
-          console.log('[useAuth] No supabaseUser data available for profile creation')
+          console.error('[useAuth] No supabaseUserData provided for profile creation')
+          setError('Missing user data for profile creation')
           return
         }
 
         console.log('[useAuth] Creating new user profile for:', supabaseUserData.email)
+        console.log('[useAuth] Available user metadata:', supabaseUserData.user_metadata)
 
         const name = supabaseUserData.user_metadata?.name || 
                     supabaseUserData.user_metadata?.full_name || 
                     supabaseUserData.email?.split('@')[0] || 
                     'Goal Crusher'
 
+        console.log('[useAuth] Extracted name for new user:', name)
         console.log('[useAuth] Calling createUserProfile...')
+        
         const { data: newUser, error: createError } = await createUserProfile(
           userId,
           supabaseUserData.email!,
@@ -166,7 +175,7 @@ export const useAuth = () => {
   const refreshUser = async () => {
     console.log('[useAuth] refreshUser called')
     if (supabaseUser) {
-      await loadUserProfile(supabaseUser.id)
+      await loadUserProfile(supabaseUser.id, supabaseUser)
     }
   }
 
