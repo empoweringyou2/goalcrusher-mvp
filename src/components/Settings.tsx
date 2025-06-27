@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Bell, 
   Moon, 
@@ -24,11 +24,17 @@ import {
   Gamepad2,
   Heart,
   HelpCircle,
-  Book
+  Book,
+  AlertCircle,
+  CheckCircle,
+  Loader2,
+  Construction
 } from 'lucide-react';
 import { HelpCenter } from './HelpCenter';
 import { AccountabilitySettings } from './AccountabilitySettings';
 import { User as UserType, AppConfig } from '../types/user';
+import { getUserSettings, updateUserSettings } from '../lib/supabase';
+import type { UserSettings } from '../lib/taskUtils';
 
 interface SettingsProps {
   onStartTutorial: () => void;
@@ -47,28 +53,114 @@ export const Settings: React.FC<SettingsProps> = ({
   onDowngradeToFree, 
   onEndBeta 
 }) => {
+  // State for all settings
   const [darkMode, setDarkMode] = useState(true);
-  const [notifications, setNotifications] = useState(true);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [dataTraining, setDataTraining] = useState(false);
+  const [dataTrainingConsent, setDataTrainingConsent] = useState(false);
   const [crushionVoice, setCrushionVoice] = useState('friendly');
   const [achievementsEnabled, setAchievementsEnabled] = useState(true);
   const [gamificationEnabled, setGamificationEnabled] = useState(true);
+  const [goalDeadlinesEnabled, setGoalDeadlinesEnabled] = useState(true);
+  const [textToSpeechEnabled, setTextToSpeechEnabled] = useState(true);
+  const [emailFrequency, setEmailFrequency] = useState('daily');
+  const [themeColor, setThemeColor] = useState('gold');
+  
+  // UI state
   const [activeTab, setActiveTab] = useState<'settings' | 'teams' | 'friends' | 'accountability' | 'information'>('settings');
   const [showHelpCenter, setShowHelpCenter] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
-  // Mock data for teams, friends, and accountability partners
-  const availableTeams = [
-    { id: 1, name: 'Productivity Ninjas', members: 234, category: 'Productivity', xp: 45680, accountability: 92 },
-    { id: 2, name: 'Fitness Warriors', members: 189, category: 'Health', xp: 38290, accountability: 88 },
-    { id: 3, name: 'Learning Legends', members: 156, category: 'Education', xp: 34570, accountability: 90 },
-    { id: 4, name: 'Creative Minds', members: 98, category: 'Creativity', xp: 28340, accountability: 86 },
-  ];
+  // Load user settings on component mount
+  useEffect(() => {
+    loadUserSettings();
+  }, [user.id]);
 
-  const myTeams = [
-    { id: 1, name: 'Productivity Ninjas', role: 'Member', joined: '2 weeks ago' },
-  ];
+  const loadUserSettings = async () => {
+    try {
+      setIsLoading(true);
+      
+      // In a real implementation, this would fetch all settings from the database
+      // For now, we'll use localStorage as a fallback for demo purposes
+      const savedSettings = localStorage.getItem(`user_settings_${user.id}`);
+      
+      if (savedSettings) {
+        const settings = JSON.parse(savedSettings);
+        setDarkMode(settings.darkMode ?? true);
+        setNotificationsEnabled(settings.notificationsEnabled ?? true);
+        setSoundEnabled(settings.soundEnabled ?? true);
+        setDataTrainingConsent(settings.dataTrainingConsent ?? false);
+        setCrushionVoice(settings.crushionVoice ?? 'friendly');
+        setAchievementsEnabled(settings.achievementsEnabled ?? true);
+        setGamificationEnabled(settings.gamificationEnabled ?? true);
+        setGoalDeadlinesEnabled(settings.goalDeadlinesEnabled ?? true);
+        setTextToSpeechEnabled(settings.textToSpeechEnabled ?? true);
+        setEmailFrequency(settings.emailFrequency ?? 'daily');
+        setThemeColor(settings.themeColor ?? 'gold');
+      }
+    } catch (error) {
+      console.error('Failed to load user settings:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
+  const saveUserSettings = async (newSettings: any) => {
+    try {
+      setSaveStatus('saving');
+      
+      // Save to localStorage for demo purposes
+      const allSettings = {
+        darkMode,
+        notificationsEnabled,
+        soundEnabled,
+        dataTrainingConsent,
+        crushionVoice,
+        achievementsEnabled,
+        gamificationEnabled,
+        goalDeadlinesEnabled,
+        textToSpeechEnabled,
+        emailFrequency,
+        themeColor,
+        ...newSettings
+      };
+      
+      localStorage.setItem(`user_settings_${user.id}`, JSON.stringify(allSettings));
+      
+      // In a real implementation, this would also call updateUserSettings
+      // await updateUserSettings(user.id, newSettings);
+      
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    } catch (error) {
+      console.error('Failed to save settings:', error);
+      setSaveStatus('error');
+      setTimeout(() => setSaveStatus('idle'), 3000);
+    }
+  };
+
+  const handleToggleSetting = (settingName: string, currentValue: boolean, setter: (value: boolean) => void) => {
+    const newValue = !currentValue;
+    setter(newValue);
+    saveUserSettings({ [settingName]: newValue });
+  };
+
+  const handleSelectSetting = (settingName: string, value: string, setter: (value: string) => void) => {
+    setter(value);
+    saveUserSettings({ [settingName]: value });
+  };
+
+  const handleEditProfile = () => {
+    // For now, just show an alert - in the future this could open a profile editing modal
+    alert('Profile editing coming soon! You can update your basic info here.');
+  };
+
+  const handleComingSoonFeature = (featureName: string) => {
+    alert(`${featureName} is coming soon! We're working hard to bring you this feature.`);
+  };
+
+  // Mock data for friends and accountability partners (keeping existing data)
   const friends = [
     { id: 1, name: 'Sarah Chen', avatar: '👩‍💼', level: 15, xp: 15420, status: 'online', mutualGoals: 3, lastActive: '2 minutes ago', streak: 89 },
     { id: 2, name: 'Marcus Johnson', avatar: '👨‍🎨', level: 14, xp: 14850, status: 'offline', mutualGoals: 1, lastActive: '1 hour ago', streak: 67 },
@@ -91,9 +183,24 @@ export const Settings: React.FC<SettingsProps> = ({
       title: 'Account',
       icon: User,
       settings: [
-        { label: 'Profile Information', action: 'navigate', icon: User },
-        { label: 'Email Preferences', action: 'navigate', icon: Mail },
-        { label: 'Privacy & Security', action: 'navigate', icon: Lock },
+        { 
+          label: 'Profile Information', 
+          action: 'navigate', 
+          icon: User,
+          onClick: () => handleComingSoonFeature('Profile Information')
+        },
+        { 
+          label: 'Email Preferences', 
+          action: 'navigate', 
+          icon: Mail,
+          onClick: () => handleComingSoonFeature('Email Preferences')
+        },
+        { 
+          label: 'Privacy & Security', 
+          action: 'navigate', 
+          icon: Lock,
+          onClick: () => handleComingSoonFeature('Privacy & Security')
+        },
       ]
     },
     {
@@ -105,7 +212,7 @@ export const Settings: React.FC<SettingsProps> = ({
           action: 'toggle', 
           icon: Trophy,
           enabled: achievementsEnabled,
-          onChange: setAchievementsEnabled,
+          onChange: () => handleToggleSetting('achievementsEnabled', achievementsEnabled, setAchievementsEnabled),
           description: 'Show achievement badges and unlock rewards'
         },
         { 
@@ -113,10 +220,20 @@ export const Settings: React.FC<SettingsProps> = ({
           action: 'toggle', 
           icon: Zap,
           enabled: gamificationEnabled,
-          onChange: setGamificationEnabled,
+          onChange: () => handleToggleSetting('gamificationEnabled', gamificationEnabled, setGamificationEnabled),
           description: 'Show XP, levels, streaks, and leaderboards'
         },
-        { label: 'Reset Progress', action: 'navigate', icon: Target, danger: true },
+        { 
+          label: 'Reset Progress', 
+          action: 'navigate', 
+          icon: Target, 
+          danger: true,
+          onClick: () => {
+            if (confirm('Are you sure you want to reset all your progress? This action cannot be undone.')) {
+              handleComingSoonFeature('Progress Reset');
+            }
+          }
+        },
       ]
     },
     {
@@ -127,12 +244,37 @@ export const Settings: React.FC<SettingsProps> = ({
           label: 'Push Notifications', 
           action: 'toggle', 
           icon: Smartphone,
-          enabled: notifications,
-          onChange: setNotifications 
+          enabled: notificationsEnabled,
+          onChange: () => handleToggleSetting('notificationsEnabled', notificationsEnabled, setNotificationsEnabled)
         },
-        { label: 'Email Reminders', action: 'select', icon: Mail, value: 'daily' },
-        { label: 'Goal Deadlines', action: 'toggle', icon: Calendar, enabled: true },
-        { label: 'Achievement Alerts', action: 'toggle', icon: Trophy, enabled: achievementsEnabled, disabled: !achievementsEnabled },
+        { 
+          label: 'Email Reminders', 
+          action: 'select', 
+          icon: Mail, 
+          value: emailFrequency,
+          options: ['never', 'daily', 'weekly'],
+          onChange: (value: string) => handleSelectSetting('emailFrequency', value, setEmailFrequency)
+        },
+        { 
+          label: 'Goal Deadlines', 
+          action: 'toggle', 
+          icon: Calendar, 
+          enabled: goalDeadlinesEnabled,
+          onChange: () => handleToggleSetting('goalDeadlinesEnabled', goalDeadlinesEnabled, setGoalDeadlinesEnabled)
+        },
+        { 
+          label: 'Achievement Alerts', 
+          action: 'toggle', 
+          icon: Trophy, 
+          enabled: achievementsEnabled && gamificationEnabled, 
+          disabled: !achievementsEnabled || !gamificationEnabled,
+          onChange: () => {
+            if (achievementsEnabled && gamificationEnabled) {
+              // This would toggle achievement alerts specifically
+              handleComingSoonFeature('Achievement Alert Settings');
+            }
+          }
+        },
       ]
     },
     {
@@ -144,9 +286,16 @@ export const Settings: React.FC<SettingsProps> = ({
           action: 'toggle', 
           icon: darkMode ? Moon : Sun,
           enabled: darkMode,
-          onChange: setDarkMode 
+          onChange: () => handleToggleSetting('darkMode', darkMode, setDarkMode)
         },
-        { label: 'Theme Color', action: 'select', icon: Globe, value: 'gold' },
+        { 
+          label: 'Theme Color', 
+          action: 'select', 
+          icon: Globe, 
+          value: themeColor,
+          options: ['gold', 'blue', 'green', 'purple', 'red'],
+          onChange: (value: string) => handleSelectSetting('themeColor', value, setThemeColor)
+        },
       ]
     },
     {
@@ -158,16 +307,23 @@ export const Settings: React.FC<SettingsProps> = ({
           action: 'toggle', 
           icon: soundEnabled ? Volume2 : VolumeX,
           enabled: soundEnabled,
-          onChange: setSoundEnabled 
+          onChange: () => handleToggleSetting('soundEnabled', soundEnabled, setSoundEnabled)
         },
         { 
           label: 'Crushion Voice Style', 
           action: 'select', 
           icon: Volume2, 
           value: crushionVoice,
-          options: ['friendly', 'motivational', 'professional', 'casual']
+          options: ['friendly', 'motivational', 'professional', 'casual'],
+          onChange: (value: string) => handleSelectSetting('crushionVoice', value, setCrushionVoice)
         },
-        { label: 'Text-to-Speech', action: 'toggle', icon: Volume2, enabled: true },
+        { 
+          label: 'Text-to-Speech', 
+          action: 'toggle', 
+          icon: Volume2, 
+          enabled: textToSpeechEnabled,
+          onChange: () => handleToggleSetting('textToSpeechEnabled', textToSpeechEnabled, setTextToSpeechEnabled)
+        },
       ]
     },
     {
@@ -178,21 +334,30 @@ export const Settings: React.FC<SettingsProps> = ({
           label: 'Allow AI Training', 
           action: 'toggle', 
           icon: Shield,
-          enabled: dataTraining,
-          onChange: setDataTraining,
+          enabled: dataTrainingConsent,
+          onChange: () => handleToggleSetting('dataTrainingConsent', dataTrainingConsent, setDataTrainingConsent),
           description: 'Help improve Crushion by allowing anonymous data usage'
         },
-        { label: 'Data Export', action: 'navigate', icon: Shield },
-        { label: 'Delete Account', action: 'navigate', icon: Shield, danger: true },
+        { 
+          label: 'Data Export', 
+          action: 'navigate', 
+          icon: Shield,
+          onClick: () => handleComingSoonFeature('Data Export')
+        },
+        { 
+          label: 'Delete Account', 
+          action: 'navigate', 
+          icon: Shield, 
+          danger: true,
+          onClick: () => {
+            if (confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
+              handleComingSoonFeature('Account Deletion');
+            }
+          }
+        },
       ]
     },
   ];
-
-  const handleToggle = (setting: any) => {
-    if (setting.onChange) {
-      setting.onChange(!setting.enabled);
-    }
-  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -212,7 +377,45 @@ export const Settings: React.FC<SettingsProps> = ({
     }
   };
 
-  // Information Tab Content
+  // Teams Tab Content - Coming Soon
+  const TeamsTab = () => (
+    <div className="flex flex-col items-center justify-center py-16 px-4">
+      <div className="text-center max-w-md">
+        <div className="w-24 h-24 bg-yellow-400/20 rounded-full flex items-center justify-center mx-auto mb-6">
+          <Construction className="w-12 h-12 text-yellow-400" />
+        </div>
+        <h3 className="text-2xl font-bold text-white mb-4">Teams Coming Soon!</h3>
+        <p className="text-gray-400 mb-6 leading-relaxed">
+          We're building an amazing team collaboration feature that will let you:
+        </p>
+        <div className="space-y-3 mb-8">
+          <div className="flex items-center gap-3 text-gray-300">
+            <div className="w-2 h-2 bg-yellow-400 rounded-full flex-shrink-0"></div>
+            <span className="text-sm">Join goal-focused teams</span>
+          </div>
+          <div className="flex items-center gap-3 text-gray-300">
+            <div className="w-2 h-2 bg-yellow-400 rounded-full flex-shrink-0"></div>
+            <span className="text-sm">Collaborate on shared objectives</span>
+          </div>
+          <div className="flex items-center gap-3 text-gray-300">
+            <div className="w-2 h-2 bg-yellow-400 rounded-full flex-shrink-0"></div>
+            <span className="text-sm">Compete in team challenges</span>
+          </div>
+          <div className="flex items-center gap-3 text-gray-300">
+            <div className="w-2 h-2 bg-yellow-400 rounded-full flex-shrink-0"></div>
+            <span className="text-sm">Share accountability and motivation</span>
+          </div>
+        </div>
+        <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+          <p className="text-gray-400 text-sm">
+            🚀 <strong className="text-white">Coming in the next update!</strong> Stay tuned for team-based goal crushing.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Information Tab Content (keeping existing implementation)
   const InformationTab = () => (
     <div className="space-y-6">
       {/* Help & Support */}
@@ -251,7 +454,10 @@ export const Settings: React.FC<SettingsProps> = ({
             <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
           </button>
           
-          <button className="flex items-center gap-3 p-3 md:p-4 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors text-left">
+          <button 
+            onClick={() => handleComingSoonFeature('Contact Support')}
+            className="flex items-center gap-3 p-3 md:p-4 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors text-left"
+          >
             <div className="w-8 md:w-10 h-8 md:h-10 bg-green-600 rounded-lg flex items-center justify-center">
               <MessageCircle className="w-4 md:w-5 h-4 md:h-5 text-white" />
             </div>
@@ -262,7 +468,10 @@ export const Settings: React.FC<SettingsProps> = ({
             <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
           </button>
           
-          <button className="flex items-center gap-3 p-3 md:p-4 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors text-left">
+          <button 
+            onClick={() => handleComingSoonFeature('Community')}
+            className="flex items-center gap-3 p-3 md:p-4 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors text-left"
+          >
             <div className="w-8 md:w-10 h-8 md:h-10 bg-purple-600 rounded-lg flex items-center justify-center">
               <Users className="w-4 md:w-5 h-4 md:h-5 text-white" />
             </div>
@@ -335,13 +544,22 @@ export const Settings: React.FC<SettingsProps> = ({
         
         <div className="mt-6 pt-4 border-t border-gray-800">
           <div className="flex flex-wrap justify-center gap-4 md:gap-6 text-sm">
-            <button className="text-yellow-400 hover:text-yellow-300 transition-colors">
+            <button 
+              onClick={() => handleComingSoonFeature('Terms of Service')}
+              className="text-yellow-400 hover:text-yellow-300 transition-colors"
+            >
               Terms of Service
             </button>
-            <button className="text-yellow-400 hover:text-yellow-300 transition-colors">
+            <button 
+              onClick={() => handleComingSoonFeature('Privacy Policy')}
+              className="text-yellow-400 hover:text-yellow-300 transition-colors"
+            >
               Privacy Policy
             </button>
-            <button className="text-yellow-400 hover:text-yellow-300 transition-colors">
+            <button 
+              onClick={() => handleComingSoonFeature('Licenses')}
+              className="text-yellow-400 hover:text-yellow-300 transition-colors"
+            >
               Licenses
             </button>
           </div>
@@ -378,85 +596,7 @@ export const Settings: React.FC<SettingsProps> = ({
     </div>
   );
 
-  // Teams Tab Content
-  const TeamsTab = () => (
-    <div className="space-y-6">
-      {/* My Teams */}
-      <div>
-        <h4 className="text-white font-medium mb-3">My Teams ({myTeams.length})</h4>
-        {myTeams.length > 0 ? (
-          <div className="space-y-2">
-            {myTeams.map((team) => (
-              <div key={team.id} className="flex flex-col md:flex-row md:items-center justify-between p-3 bg-gray-800 rounded-lg gap-3">
-                <div>
-                  <h5 className="text-white font-medium">{team.name}</h5>
-                  <p className="text-sm text-gray-400">{team.role} • Joined {team.joined}</p>
-                </div>
-                <div className="flex gap-2">
-                  <button className="px-3 py-1 bg-gray-700 text-white text-sm rounded hover:bg-gray-600 transition-colors">
-                    View
-                  </button>
-                  <button className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors">
-                    Leave
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-gray-400 text-sm">You haven't joined any teams yet.</p>
-        )}
-      </div>
-
-      {/* Available Teams */}
-      <div>
-        <h4 className="text-white font-medium mb-3">Discover Teams</h4>
-        <div className="space-y-3">
-          {availableTeams.filter(team => !myTeams.some(myTeam => myTeam.id === team.id)).map((team) => (
-            <div key={team.id} className="flex flex-col md:flex-row md:items-center justify-between p-3 bg-gray-800 rounded-lg gap-3">
-              <div>
-                <h5 className="text-white font-medium">{team.name}</h5>
-                <div className="flex flex-wrap items-center gap-2 md:gap-4 text-sm text-gray-400 mt-1">
-                  <span>{team.members} members</span>
-                  <span>{team.category}</span>
-                  <span>{team.xp.toLocaleString()} XP</span>
-                  <span className="text-green-400">{team.accountability}% accountability</span>
-                </div>
-              </div>
-              <button className="bg-yellow-400 text-black px-4 py-2 rounded-lg font-medium hover:bg-yellow-300 transition-colors w-full md:w-auto">
-                Join Team
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Create Team */}
-      <div className="border-t border-gray-800 pt-4">
-        <h4 className="text-white font-medium mb-3">Create New Team</h4>
-        <div className="space-y-3">
-          <input
-            type="text"
-            placeholder="Team name"
-            className="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 focus:border-yellow-400 focus:outline-none"
-          />
-          <select className="w-full bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 focus:border-yellow-400 focus:outline-none">
-            <option value="">Select category</option>
-            <option value="productivity">Productivity</option>
-            <option value="health">Health & Fitness</option>
-            <option value="education">Education & Learning</option>
-            <option value="creativity">Creativity</option>
-            <option value="business">Business</option>
-          </select>
-          <button className="w-full bg-yellow-400 text-black py-2 rounded-lg font-medium hover:bg-yellow-300 transition-colors">
-            Create Team
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-
-  // Friends Tab Content
+  // Friends Tab Content (keeping existing implementation)
   const FriendsTab = () => (
     <div className="space-y-6">
       {/* Add Friend */}
@@ -468,7 +608,10 @@ export const Settings: React.FC<SettingsProps> = ({
             placeholder="Enter username or email"
             className="flex-1 bg-gray-800 text-white px-3 py-2 rounded border border-gray-700 focus:border-yellow-400 focus:outline-none"
           />
-          <button className="bg-yellow-400 text-black px-4 py-2 rounded-lg font-medium hover:bg-yellow-300 transition-colors">
+          <button 
+            onClick={() => handleComingSoonFeature('Friend Invites')}
+            className="bg-yellow-400 text-black px-4 py-2 rounded-lg font-medium hover:bg-yellow-300 transition-colors"
+          >
             Send Invite
           </button>
         </div>
@@ -490,10 +633,16 @@ export const Settings: React.FC<SettingsProps> = ({
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <button className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition-colors">
+                    <button 
+                      onClick={() => handleComingSoonFeature('Accept Friend Request')}
+                      className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 transition-colors"
+                    >
                       Accept
                     </button>
-                    <button className="px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-gray-700 transition-colors">
+                    <button 
+                      onClick={() => handleComingSoonFeature('Decline Friend Request')}
+                      className="px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-gray-700 transition-colors"
+                    >
                       Decline
                     </button>
                   </div>
@@ -545,15 +694,27 @@ export const Settings: React.FC<SettingsProps> = ({
                 </div>
               </div>
               <div className="flex gap-2">
-                <button className="p-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors" title="Message">
+                <button 
+                  onClick={() => handleComingSoonFeature('Message Friend')}
+                  className="p-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors" 
+                  title="Message"
+                >
                   <MessageCircle className="w-4 h-4" />
                 </button>
                 {gamificationEnabled && (
-                  <button className="p-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors" title="Challenge">
+                  <button 
+                    onClick={() => handleComingSoonFeature('Challenge Friend')}
+                    className="p-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors" 
+                    title="Challenge"
+                  >
                     <Gamepad2 className="w-4 h-4" />
                   </button>
                 )}
-                <button className="p-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors" title="Accountability Partner">
+                <button 
+                  onClick={() => handleComingSoonFeature('Accountability Partner')}
+                  className="p-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors" 
+                  title="Accountability Partner"
+                >
                   <Shield className="w-4 h-4" />
                 </button>
               </div>
@@ -574,7 +735,10 @@ export const Settings: React.FC<SettingsProps> = ({
                 <p className="text-xs text-gray-400">2 mutual friends</p>
               </div>
             </div>
-            <button className="w-full bg-gray-700 hover:bg-gray-600 text-white text-sm py-1 rounded transition-colors">
+            <button 
+              onClick={() => handleComingSoonFeature('Add Friend')}
+              className="w-full bg-gray-700 hover:bg-gray-600 text-white text-sm py-1 rounded transition-colors"
+            >
               Add Friend
             </button>
           </div>
@@ -587,7 +751,10 @@ export const Settings: React.FC<SettingsProps> = ({
                 <p className="text-xs text-gray-400">In Productivity Ninjas</p>
               </div>
             </div>
-            <button className="w-full bg-gray-700 hover:bg-gray-600 text-white text-sm py-1 rounded transition-colors">
+            <button 
+              onClick={() => handleComingSoonFeature('Add Friend')}
+              className="w-full bg-gray-700 hover:bg-gray-600 text-white text-sm py-1 rounded transition-colors"
+            >
               Add Friend
             </button>
           </div>
@@ -596,7 +763,7 @@ export const Settings: React.FC<SettingsProps> = ({
     </div>
   );
 
-  // Accountability Tab Content - Now using the new AccountabilitySettings component
+  // Accountability Tab Content - Using the AccountabilitySettings component
   const AccountabilityTab = () => (
     <div className="space-y-6">
       {/* Accountability Settings Component */}
@@ -625,10 +792,16 @@ export const Settings: React.FC<SettingsProps> = ({
                 </div>
               </div>
               <div className="flex gap-2">
-                <button className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors">
+                <button 
+                  onClick={() => handleComingSoonFeature('View Partner Details')}
+                  className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
+                >
                   View Details
                 </button>
-                <button className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors">
+                <button 
+                  onClick={() => handleComingSoonFeature('Remove Partner')}
+                  className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors"
+                >
                   Remove
                 </button>
               </div>
@@ -641,7 +814,10 @@ export const Settings: React.FC<SettingsProps> = ({
       <div className="border-t border-gray-800 pt-4">
         <h4 className="text-white font-medium mb-3">Add Accountability Partner</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <button className="p-4 bg-gray-800 hover:bg-gray-700 rounded-lg text-left transition-colors">
+          <button 
+            onClick={() => handleComingSoonFeature('Invite Friend as Partner')}
+            className="p-4 bg-gray-800 hover:bg-gray-700 rounded-lg text-left transition-colors"
+          >
             <div className="flex items-center gap-3 mb-2">
               <UserPlus className="w-5 h-5 text-blue-400" />
               <span className="text-white font-medium">Invite Friend</span>
@@ -649,7 +825,10 @@ export const Settings: React.FC<SettingsProps> = ({
             <p className="text-sm text-gray-400">Ask a friend to be your accountability partner</p>
           </button>
           
-          <button className="p-4 bg-gray-800 hover:bg-gray-700 rounded-lg text-left transition-colors">
+          <button 
+            onClick={() => handleComingSoonFeature('Join Team')}
+            className="p-4 bg-gray-800 hover:bg-gray-700 rounded-lg text-left transition-colors"
+          >
             <div className="flex items-center gap-3 mb-2">
               <Users className="w-5 h-5 text-purple-400" />
               <span className="text-white font-medium">Join Team</span>
@@ -657,7 +836,10 @@ export const Settings: React.FC<SettingsProps> = ({
             <p className="text-sm text-gray-400">Get accountability from a goal team</p>
           </button>
           
-          <button className="p-4 bg-gray-800 hover:bg-gray-700 rounded-lg text-left transition-colors">
+          <button 
+            onClick={() => handleComingSoonFeature('Public Commitment')}
+            className="p-4 bg-gray-800 hover:bg-gray-700 rounded-lg text-left transition-colors"
+          >
             <div className="flex items-center gap-3 mb-2">
               <Globe className="w-5 h-5 text-yellow-400" />
               <span className="text-white font-medium">Public Commitment</span>
@@ -665,7 +847,10 @@ export const Settings: React.FC<SettingsProps> = ({
             <p className="text-sm text-gray-400">Share your goals publicly for social accountability</p>
           </button>
           
-          <button className="p-4 bg-gray-800 hover:bg-gray-700 rounded-lg text-left transition-colors">
+          <button 
+            onClick={() => handleComingSoonFeature('AI Accountability')}
+            className="p-4 bg-gray-800 hover:bg-gray-700 rounded-lg text-left transition-colors"
+          >
             <div className="flex items-center gap-3 mb-2">
               <Zap className="w-5 h-5 text-green-400" />
               <span className="text-white font-medium">AI Accountability</span>
@@ -685,6 +870,30 @@ export const Settings: React.FC<SettingsProps> = ({
         <p className="text-gray-400">Customize your GoalCrusher experience</p>
       </div>
 
+      {/* Save Status Indicator */}
+      {saveStatus !== 'idle' && (
+        <div className="mb-4">
+          {saveStatus === 'saving' && (
+            <div className="flex items-center gap-2 text-blue-400 text-sm">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>Saving settings...</span>
+            </div>
+          )}
+          {saveStatus === 'saved' && (
+            <div className="flex items-center gap-2 text-green-400 text-sm">
+              <CheckCircle className="w-4 h-4" />
+              <span>Settings saved successfully!</span>
+            </div>
+          )}
+          {saveStatus === 'error' && (
+            <div className="flex items-center gap-2 text-red-400 text-sm">
+              <AlertCircle className="w-4 h-4" />
+              <span>Failed to save settings. Please try again.</span>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* User Profile Card */}
       <div className="bg-gray-900 rounded-xl p-4 md:p-6 border border-gray-800 mb-6">
         <div className="flex flex-col md:flex-row items-center gap-4">
@@ -703,7 +912,10 @@ export const Settings: React.FC<SettingsProps> = ({
               <p className="text-gray-400">Member since {user.joinDate.toLocaleDateString()}</p>
             )}
           </div>
-          <button className="bg-yellow-400 text-black px-4 py-2 rounded-lg font-medium hover:bg-yellow-300 transition-colors">
+          <button 
+            onClick={handleEditProfile}
+            className="bg-yellow-400 text-black px-4 py-2 rounded-lg font-medium hover:bg-yellow-300 transition-colors"
+          >
             Edit Profile
           </button>
         </div>
@@ -740,11 +952,17 @@ export const Settings: React.FC<SettingsProps> = ({
                     You've disabled gamification features. You can still access core functionality through these quick actions:
                   </p>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                    <button className="bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded text-sm transition-colors flex items-center gap-2">
+                    <button 
+                      onClick={() => handleComingSoonFeature('View Goals')}
+                      className="bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded text-sm transition-colors flex items-center gap-2"
+                    >
                       <Target className="w-4 h-4" />
                       View Goals
                     </button>
-                    <button className="bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded text-sm transition-colors flex items-center gap-2">
+                    <button 
+                      onClick={() => handleComingSoonFeature('Schedule Tasks')}
+                      className="bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded text-sm transition-colors flex items-center gap-2"
+                    >
                       <Calendar className="w-4 h-4" />
                       Schedule Tasks
                     </button>
@@ -797,7 +1015,7 @@ export const Settings: React.FC<SettingsProps> = ({
                         <div className="flex items-center gap-2 flex-shrink-0">
                           {setting.action === 'toggle' && (
                             <button
-                              onClick={() => !isDisabled && handleToggle(setting)}
+                              onClick={() => !isDisabled && setting.onChange && setting.onChange()}
                               disabled={isDisabled}
                               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
                                 isDisabled ? 'bg-gray-700 cursor-not-allowed' :
@@ -816,11 +1034,7 @@ export const Settings: React.FC<SettingsProps> = ({
                             <select 
                               className="bg-gray-800 text-white px-3 py-1 rounded border border-gray-700 focus:border-yellow-400 focus:outline-none"
                               value={setting.value}
-                              onChange={(e) => {
-                                if (setting.label === 'Crushion Voice Style') {
-                                  setCrushionVoice(e.target.value);
-                                }
-                              }}
+                              onChange={(e) => setting.onChange && setting.onChange(e.target.value)}
                             >
                               {setting.options ? setting.options.map((option: string) => (
                                 <option key={option} value={option} className="capitalize">
@@ -837,7 +1051,10 @@ export const Settings: React.FC<SettingsProps> = ({
                           )}
                           
                           {setting.action === 'navigate' && (
-                            <button className="text-gray-400 hover:text-white transition-colors p-1">
+                            <button 
+                              onClick={setting.onClick}
+                              className="text-gray-400 hover:text-white transition-colors p-1"
+                            >
                               <ChevronRight className="w-5 h-5" />
                             </button>
                           )}
