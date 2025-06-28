@@ -96,7 +96,7 @@ export const signUpWithEmail = async (email: string, password: string, name: str
   }
   
   console.log('[signUpWithEmail] Starting signup process for:', email);
-  console.log('[signUpWithEmail] Redirect URL will be:', `${window.location.origin}/verify`);
+  console.log('[signUpWithEmail] Redirect URL will be:', `${window.location.origin}/auth/callback`);
   
   const { data, error } = await supabase.auth.signUp({
     email,
@@ -107,7 +107,7 @@ export const signUpWithEmail = async (email: string, password: string, name: str
         full_name: name,
         avatar: '🧙‍♂️'
       },
-      emailRedirectTo: `${window.location.origin}/verify`
+      emailRedirectTo: `${window.location.origin}/auth/callback`
     }
   })
   
