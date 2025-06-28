@@ -23,6 +23,9 @@ interface Message {
 // App data version for localStorage management
 const APP_DATA_VERSION = "v1.2";
 
+// Recording time limit in milliseconds (10 minutes)
+const RECORDING_TIME_LIMIT = 10 * 60 * 1000; // 10 minutes
+
 // Robust localStorage helper functions with versioning
 const getVersionedLocalStorage = (key: string, defaultValue: any = null) => {
   try {
@@ -85,8 +88,13 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
   const [threadId, setThreadId] = useState<string | undefined>();
   const [isProcessing, setIsProcessing] = useState(false);
   const [speechError, setSpeechError] = useState<string | null>(null);
+  const [recordingTimeLeft, setRecordingTimeLeft] = useState<number | null>(null);
+  const [recordingStartTime, setRecordingStartTime] = useState<number | null>(null);
+  
   const recognitionRef = useRef<any>(null);
   const speechSynthesisRef = useRef<SpeechSynthesis | null>(null);
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const timeUpdateIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const hasVoiceAccess = isProFeatureAvailable(user.plan, appConfig.betaAccess);
   const hasOpenAI = isOpenAIConfigured();
@@ -115,6 +123,32 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
           console.log('[GoalWizard] Speech recognition started');
           setIsListening(true);
           setSpeechError(null);
+          
+          // Start the 10-minute timer
+          const startTime = Date.now();
+          setRecordingStartTime(startTime);
+          setRecordingTimeLeft(RECORDING_TIME_LIMIT);
+          
+          // Set up the timeout to stop recording after 10 minutes
+          recordingTimerRef.current = setTimeout(() => {
+            console.log('[GoalWizard] 10-minute recording limit reached, stopping...');
+            stopListening();
+            setSpeechError('Recording stopped: 10-minute limit reached. Please start a new recording if needed.');
+          }, RECORDING_TIME_LIMIT);
+          
+          // Update the countdown every second
+          timeUpdateIntervalRef.current = setInterval(() => {
+            const elapsed = Date.now() - startTime;
+            const remaining = Math.max(0, RECORDING_TIME_LIMIT - elapsed);
+            setRecordingTimeLeft(remaining);
+            
+            if (remaining <= 0) {
+              if (timeUpdateIntervalRef.current) {
+                clearInterval(timeUpdateIntervalRef.current);
+                timeUpdateIntervalRef.current = null;
+              }
+            }
+          }, 1000);
         };
 
         recognitionRef.current.onresult = (event: any) => {
@@ -134,11 +168,16 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
             setSpeechError('No speech detected. Please try again.');
           }
           
+          // Clean up timers when recognition ends with result
+          cleanupRecordingTimers();
           setIsListening(false);
         };
 
         recognitionRef.current.onerror = (event: any) => {
           console.error('[GoalWizard] Speech recognition error:', event.error);
+          
+          // Clean up timers on error
+          cleanupRecordingTimers();
           setIsListening(false);
           
           let errorMessage = 'Speech recognition error. ';
@@ -167,6 +206,9 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
 
         recognitionRef.current.onend = () => {
           console.log('[GoalWizard] Speech recognition ended');
+          
+          // Clean up timers when recognition ends
+          cleanupRecordingTimers();
           setIsListening(false);
         };
 
@@ -193,6 +235,27 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
 
     const savedAudioPreference = getVersionedLocalStorage('preferAudio', false);
     setPreferAudio(savedAudioPreference);
+  }, []);
+
+  // Cleanup function for recording timers
+  const cleanupRecordingTimers = () => {
+    if (recordingTimerRef.current) {
+      clearTimeout(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    if (timeUpdateIntervalRef.current) {
+      clearInterval(timeUpdateIntervalRef.current);
+      timeUpdateIntervalRef.current = null;
+    }
+    setRecordingTimeLeft(null);
+    setRecordingStartTime(null);
+  };
+
+  // Cleanup timers on component unmount
+  useEffect(() => {
+    return () => {
+      cleanupRecordingTimers();
+    };
   }, []);
 
   // Auto-speak new AI messages when preferAudio is enabled
@@ -319,6 +382,7 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
     if (recognitionRef.current && isListening) {
       console.log('[GoalWizard] Stopping speech recognition...');
       recognitionRef.current.stop();
+      cleanupRecordingTimers();
       setIsListening(false);
     }
   };
@@ -436,6 +500,14 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
       "Weekly reminders",
       "Daily check-ins"
     ]
+  };
+
+  // Format time remaining for display
+  const formatTimeRemaining = (milliseconds: number) => {
+    const totalSeconds = Math.ceil(milliseconds / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
   return (
@@ -558,12 +630,19 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
           </div>
         ))}
 
-        {/* Voice listening indicator */}
+        {/* Voice listening indicator with timer */}
         {isListening && (
           <div className="flex justify-center">
             <div className="bg-red-500/20 border border-red-500/40 rounded-xl p-4 flex items-center gap-3">
               <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
-              <span className="text-red-400 text-sm font-medium">Listening... Speak now!</span>
+              <div className="flex flex-col">
+                <span className="text-red-400 text-sm font-medium">Listening... Speak now!</span>
+                {recordingTimeLeft !== null && (
+                  <span className="text-gray-400 text-xs mt-1">
+                    Time remaining: {formatTimeRemaining(recordingTimeLeft)}
+                  </span>
+                )}
+              </div>
               <div className="flex gap-1">
                 {[...Array(3)].map((_, i) => (
                   <div
@@ -679,18 +758,20 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
                   showUpgradePrompt={false}
                 >
                   {speechSupported && (
-                    <button
-                      onClick={isListening ? stopListening : startListening}
-                      disabled={isProcessing}
-                      className={`p-2 rounded-lg transition-all ${
-                        isListening 
-                          ? 'bg-red-500 text-white animate-pulse' 
-                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                      } disabled:opacity-50 disabled:cursor-not-allowed`}
-                      title={isListening ? 'Stop listening' : 'Start voice input'}
-                    >
-                      {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                    </button>
+                    <ProTooltip featureName="Voice Input (10min limit)">
+                      <button
+                        onClick={isListening ? stopListening : startListening}
+                        disabled={isProcessing}
+                        className={`p-2 rounded-lg transition-all ${
+                          isListening 
+                            ? 'bg-red-500 text-white animate-pulse' 
+                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                        } disabled:opacity-50 disabled:cursor-not-allowed`}
+                        title={isListening ? 'Stop listening (10min limit)' : 'Start voice input (10min limit)'}
+                      >
+                        {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                      </button>
+                    </ProTooltip>
                   )}
                 </ProFeatureGate>
                 
@@ -720,7 +801,7 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
                     <>👁️ Read mode: Click speak button to hear Crushion • Voice: {crushionVoiceStyle}</>
                   )}
                   {speechSupported && (
-                    <> • 💬 Voice input available</>
+                    <> • 🎤 Voice input available (10min limit)</>
                   )}
                 </>
               ) : (
