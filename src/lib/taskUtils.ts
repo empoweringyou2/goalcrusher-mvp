@@ -8,6 +8,7 @@ export interface UserSettings {
   accountability_type: 'self' | 'ai' | 'partner' | 'group';
   completion_method_setting: 'user' | 'ai' | 'external';
   default_proof_time_minutes: number;
+  has_created_first_goal: boolean;
 }
 
 export type { UserSettings };
@@ -133,7 +134,8 @@ export const getUserSettingsWithFallback = async (userId: string): Promise<UserS
     const defaultSettings: UserSettings = {
       accountability_type: 'self',
       completion_method_setting: 'user',
-      default_proof_time_minutes: 10
+      default_proof_time_minutes: 10,
+      has_created_first_goal: false
     };
 
     // Cache the default settings
@@ -153,7 +155,8 @@ export const getUserSettingsWithFallback = async (userId: string): Promise<UserS
     return {
       accountability_type: 'self',
       completion_method_setting: 'user',
-      default_proof_time_minutes: 10
+      default_proof_time_minutes: 10,
+      has_created_first_goal: false
     };
   }
 };
@@ -169,7 +172,8 @@ export const updateUserSettingsWithCache = async (userId: string, settings: Part
       const currentSettings = getVersionedLocalStorage(`user_settings_${userId}`, {
         accountability_type: 'self',
         completion_method_setting: 'user',
-        default_proof_time_minutes: 10
+        default_proof_time_minutes: 10,
+        has_created_first_goal: false
       });
       
       const updatedSettings = { ...currentSettings, ...settings };

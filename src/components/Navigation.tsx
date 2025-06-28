@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Calendar, Target, Trophy, BarChart3, Settings, Wand2, LogOut } from 'lucide-react';
 import { Screen } from '../App';
 import { User, AppConfig } from '../types/user';
+import { UserSettings } from '../lib/taskUtils';
 import { signOut } from '../lib/supabase';
 
 interface NavigationProps {
@@ -10,9 +11,16 @@ interface NavigationProps {
   onNavigate: (screen: Screen) => void;
   user: User;
   appConfig: AppConfig;
+  userSettings: UserSettings | null;
 }
 
-export const Navigation: React.FC<NavigationProps> = ({ currentScreen, onNavigate, user, appConfig }) => {
+export const Navigation: React.FC<NavigationProps> = ({ 
+  currentScreen, 
+  onNavigate, 
+  user, 
+  appConfig, 
+  userSettings 
+}) => {
   const navigate = useNavigate();
   
   const navItems = [
@@ -37,6 +45,9 @@ export const Navigation: React.FC<NavigationProps> = ({ currentScreen, onNavigat
     navigate(item.path);
   };
 
+  // Check if we should show the glow effect for Goal Wizard
+  const shouldShowGlow = userSettings && !userSettings.has_created_first_goal;
+
   return (
     <>
       {/* Mobile Navigation */}
@@ -45,16 +56,17 @@ export const Navigation: React.FC<NavigationProps> = ({ currentScreen, onNavigat
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentScreen === item.id;
+            const isGoalWizard = item.id === 'goal-wizard';
             
             return (
               <button
                 key={item.id}
                 onClick={() => handleNavigation(item)}
-                className={`flex-1 p-3 flex flex-col items-center gap-1 transition-colors ${
+                className={`flex-1 p-3 flex flex-col items-center gap-1 transition-colors relative ${
                   isActive 
                     ? 'text-yellow-400 bg-gray-800' 
                     : 'text-gray-400 hover:text-white'
-                }`}
+                } ${isGoalWizard && shouldShowGlow ? 'glow-effect' : ''}`}
               >
                 <Icon className="w-5 h-5" />
                 <span className="text-xs">{item.label}</span>
@@ -82,16 +94,17 @@ export const Navigation: React.FC<NavigationProps> = ({ currentScreen, onNavigat
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentScreen === item.id;
+            const isGoalWizard = item.id === 'goal-wizard';
             
             return (
               <button
                 key={item.id}
                 onClick={() => handleNavigation(item)}
-                className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors ${
+                className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors relative ${
                   isActive 
                     ? 'bg-yellow-400 text-black font-semibold' 
                     : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-                }`}
+                } ${isGoalWizard && shouldShowGlow ? 'glow-effect' : ''}`}
               >
                 <Icon className="w-5 h-5" />
                 {item.label}

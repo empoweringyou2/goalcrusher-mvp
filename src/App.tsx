@@ -13,6 +13,7 @@ import { useAuth } from './hooks/useAuth';
 import { AppConfig } from './types/user';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { supabase } from './lib/supabase';
+import { getUserSettingsWithFallback, updateUserSettingsWithCache, UserSettings } from './lib/taskUtils';
 
 export type Screen = 'welcome' | 'dashboard' | 'goal-wizard' | 'gamification' | 'analytics' | 'settings';
 
@@ -23,6 +24,8 @@ function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('dashboard');
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [userSettings, setUserSettings] = useState<UserSettings | null>(null);
+  const [isLoadingSettings, setIsLoadingSettings] = useState(false);
   
   const { user, loading, error, isAuthenticated } = useAuth();
   const location = useLocation();
@@ -86,6 +89,34 @@ function App() {
       }
     }
   }, []);
+
+  // Load user settings when user is authenticated
+  useEffect(() => {
+    const loadUserSettings = async () => {
+      if (isAuthenticated && user && !isLoadingSettings) {
+        setIsLoadingSettings(true);
+        try {
+          console.log('[App] Loading user settings for:', user.id);
+          const settings = await getUserSettingsWithFallback(user.id);
+          setUserSettings(settings);
+          console.log('[App] User settings loaded:', settings);
+        } catch (error) {
+          console.error('[App] Failed to load user settings:', error);
+          // Set default settings if loading fails
+          setUserSettings({
+            accountability_type: 'self',
+            completion_method_setting: 'user',
+            default_proof_time_minutes: 10,
+            has_created_first_goal: false
+          });
+        } finally {
+          setIsLoadingSettings(false);
+        }
+      }
+    };
+
+    loadUserSettings();
+  }, [isAuthenticated, user]);
 
   // Versioned localStorage helper functions
   const getVersionedLocalStorage = (key: string, defaultValue: any = null) => {
@@ -162,6 +193,28 @@ function App() {
 
   const startOnboardingTutorial = () => {
     setShowOnboarding(true);
+  };
+
+  // Handle when user creates their first goal
+  const handleFirstGoalCreated = async () => {
+    if (user && userSettings && !userSettings.has_created_first_goal) {
+      console.log('[App] User created their first goal, updating settings');
+      try {
+        const success = await updateUserSettingsWithCache(user.id, {
+          has_created_first_goal: true
+        });
+        
+        if (success) {
+          // Update local state to remove the glow effect immediately
+          setUserSettings(prev => prev ? { ...prev, has_created_first_goal: true } : null);
+          console.log('[App] First goal creation tracked successfully');
+        } else {
+          console.error('[App] Failed to update first goal creation status');
+        }
+      } catch (error) {
+        console.error('[App] Error updating first goal creation status:', error);
+      }
+    }
   };
 
   // Show loading screen while checking auth
@@ -251,6 +304,7 @@ function App() {
                 onNavigate={navigateTo}
                 user={user}
                 appConfig={appConfig}
+                userSettings={userSettings}
               />
               
               <main className="flex-1 md:ml-64">
@@ -274,6 +328,7 @@ function App() {
                       onNavigate={navigateTo}
                       user={user}
                       appConfig={appConfig}
+                      onFirstGoalCreated={handleFirstGoalCreated}
                     />
                   } />
                   <Route path="/gamification" element={

@@ -386,7 +386,8 @@ export const createUserSettings = async (userId: string) => {
       email_frequency: 'daily',
       accountability_type: 'self',
       completion_method_setting: 'user',
-      default_proof_time_minutes: 10
+      default_proof_time_minutes: 10,
+      has_created_first_goal: false
     };
 
     console.log('[createUserSettings] Settings data to insert:', settingsData);
@@ -429,13 +430,14 @@ export const getUserSettings = async (userId: string): Promise<UserSettings | nu
       return {
         accountability_type: 'self',
         completion_method_setting: 'user',
-        default_proof_time_minutes: 10
+        default_proof_time_minutes: 10,
+        has_created_first_goal: false
       };
     }
 
     const { data, error } = await supabase
       .from('user_settings')
-      .select('accountability_type, completion_method_setting, default_proof_time_minutes')
+      .select('accountability_type, completion_method_setting, default_proof_time_minutes, has_created_first_goal')
       .eq('user_id', userId)
       .maybeSingle();
 
@@ -449,7 +451,8 @@ export const getUserSettings = async (userId: string): Promise<UserSettings | nu
       return {
         accountability_type: 'self',
         completion_method_setting: 'user',
-        default_proof_time_minutes: 10
+        default_proof_time_minutes: 10,
+        has_created_first_goal: false
       };
     }
 

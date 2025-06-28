@@ -9,6 +9,7 @@ interface GoalWizardProps {
   onNavigate: (screen: Screen) => void;
   user: User;
   appConfig: AppConfig;
+  onFirstGoalCreated?: () => void;
 }
 
 interface Message {
@@ -65,7 +66,7 @@ const setVersionedLocalStorage = (key: string, value: any) => {
   }
 };
 
-export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appConfig }) => {
+export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appConfig, onFirstGoalCreated }) => {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
@@ -142,6 +143,14 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
       }
     }
   }, [messages, preferAudio, hasVoiceAccess]);
+
+  // Handle step transitions and call onFirstGoalCreated when complete
+  useEffect(() => {
+    if (currentStep === 'complete' && onFirstGoalCreated) {
+      console.log('[GoalWizard] Goal creation completed, calling onFirstGoalCreated');
+      onFirstGoalCreated();
+    }
+  }, [currentStep, onFirstGoalCreated]);
 
   const getVoiceSettings = (style: string) => {
     const voices = speechSynthesisRef.current?.getVoices() || [];
