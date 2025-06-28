@@ -48,12 +48,11 @@ if (!supabaseUrl || !supabaseAnonKey) {
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: true,
-      flowType: 'pkce',
-      // TEMPORARY: Use sessionStorage for diagnostic purposes
-      storage: sessionStorage // This is temporary for testing - will revert to localStorage after diagnosis
+      flowType: 'pkce'
+      // Reverted back to default localStorage for proper PKCE flow
     }
   })
-  console.log('[Supabase] Real Supabase client created successfully with sessionStorage (TEMPORARY)')
+  console.log('[Supabase] Real Supabase client created successfully with localStorage (default)')
 }
 
 export { supabase }
