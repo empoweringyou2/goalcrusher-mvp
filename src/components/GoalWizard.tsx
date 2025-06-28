@@ -384,38 +384,6 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
               </button>
             </div>
           </ProFeatureGate>
-
-          {/* Speak/Stop Button */}
-          {hasVoiceAccess && (!preferAudio || isSpeaking) && speechSynthesisRef.current && (
-            <button
-              onClick={isSpeaking ? stopSpeaking : () => {
-                const lastAiMessage = messages.filter(m => !m.isUser && !m.isLoading).pop();
-                if (lastAiMessage) speakText(lastAiMessage.text);
-              }}
-              className={`p-2 rounded-lg transition-all ${
-                isSpeaking 
-                  ? 'bg-red-500 text-white animate-pulse' 
-                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
-              }`}
-              title={isSpeaking ? 'Stop speaking' : 'Speak last message'}
-            >
-              {isSpeaking ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
-            </button>
-          )}
-
-          {/* Progress indicator */}
-          <div className="flex gap-1">
-            {['discovery', 'breakdown', 'scheduling', 'complete'].map((step, index) => (
-              <div
-                key={step}
-                className={`w-2 h-2 rounded-full transition-colors ${
-                  currentStep === step || (['breakdown', 'scheduling', 'complete'].includes(currentStep) && index < ['discovery', 'breakdown', 'scheduling', 'complete'].indexOf(currentStep))
-                    ? 'bg-yellow-400'
-                    : 'bg-gray-700'
-                }`}
-              />
-            ))}
-          </div>
         </div>
       </div>
 
@@ -451,17 +419,6 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
               }`}>
                 {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </p>
-              
-              {/* Individual message speak button */}
-              {!message.isUser && !message.isLoading && !preferAudio && hasVoiceAccess && speechSynthesisRef.current && (
-                <button
-                  onClick={() => speakText(message.text)}
-                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1 bg-gray-700 hover:bg-gray-600 rounded transition-all"
-                  title="Speak this message"
-                >
-                  <Volume2 className="w-3 h-3 text-gray-300" />
-                </button>
-              )}
             </div>
           </div>
         ))}
