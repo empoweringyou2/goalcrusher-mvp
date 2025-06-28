@@ -144,8 +144,21 @@ export const useAuth = () => {
         
         const { data, error: fetchError } = await getUserProfile(userId)
         
+        console.log(`[useAuth] getUserProfile attempt ${retryCount + 1} result:`, {
+          hasData: !!data,
+          hasError: !!fetchError,
+          errorCode: fetchError?.code,
+          errorMessage: fetchError?.message,
+          userData: data ? {
+            id: data.id,
+            email: data.email,
+            name: data.name,
+            plan: data.plan
+          } : null
+        })
+        
         if (fetchError) {
-          console.error('[useAuth] Error fetching user profile:', fetchError)
+          console.error(`[useAuth] Error fetching user profile (attempt ${retryCount + 1}):`, fetchError)
           
           // If it's an RLS error and this is the first attempt, try to handle ID synchronization
           if ((fetchError.code === 'PGRST301' || fetchError.message?.includes('RLS')) && retryCount === 0) {
@@ -155,6 +168,13 @@ export const useAuth = () => {
                 supabaseUserData.email!,
                 userId
               )
+              
+              console.log('[useAuth] ID synchronization result:', {
+                hasUpdatedUser: !!updatedUser,
+                hasUpdateError: !!updateError,
+                updateErrorCode: updateError?.code,
+                updateErrorMessage: updateError?.message
+              })
               
               if (updateError) {
                 console.error('[useAuth] Error updating user profile ID:', updateError)
@@ -168,8 +188,15 @@ export const useAuth = () => {
             }
           }
         } else if (data) {
+          console.log(`[useAuth] Successfully found user profile on attempt ${retryCount + 1}:`, {
+            id: data.id,
+            email: data.email,
+            name: data.name
+          })
           existingUser = data
           break
+        } else {
+          console.log(`[useAuth] No data returned on attempt ${retryCount + 1}`)
         }
         
         retryCount++
@@ -182,12 +209,12 @@ export const useAuth = () => {
       }
 
       if (existingUser) {
-        console.log('[useAuth] Found user profile:', existingUser.name)
+        console.log('[useAuth] Found user profile after', retryCount + 1, 'attempts:', existingUser.name)
         
         // Ensure user settings exist (they should be created by the trigger)
         await ensureUserSettingsExist(existingUser.id)
         
-        setUser({
+        const userObject = {
           id: existingUser.id,
           name: existingUser.name,
           email: existingUser.email,
@@ -196,9 +223,12 @@ export const useAuth = () => {
           level: 1,
           xp: 0,
           joinDate: new Date(existingUser.created_at)
-        })
+        }
+        
+        console.log('[useAuth] Setting user object:', userObject)
+        setUser(userObject)
       } else {
-        console.error('[useAuth] Could not load user profile after all retries')
+        console.error('[useAuth] Could not load user profile after all retries. Total attempts:', retryCount)
         setError('Failed to load user profile. The database trigger may not have completed yet. Please try refreshing the page.')
         setUser(null)
       }
@@ -217,6 +247,11 @@ export const useAuth = () => {
     
     try {
       const settings = await getUserSettings(userId)
+      
+      console.log('[useAuth] User settings check result:', {
+        hasSettings: !!settings,
+        settings: settings
+      })
       
       if (!settings) {
         console.log('[useAuth] No user settings found - this should not happen with the trigger')

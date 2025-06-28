@@ -187,7 +187,14 @@ export const updateUserProfileIdByEmail = async (email: string, newUserId: strin
       success: !!data,
       hasError: !!error,
       errorCode: error?.code,
-      errorMessage: error?.message
+      errorMessage: error?.message,
+      errorDetails: error?.details,
+      errorHint: error?.hint,
+      updatedData: data ? {
+        id: data.id,
+        email: data.email,
+        name: data.name
+      } : null
     });
 
     if (error) {
@@ -230,10 +237,15 @@ export const getUserProfile = async (userId: string) => {
       hasError: !!error,
       errorCode: error?.code,
       errorMessage: error?.message,
+      errorDetails: error?.details,
+      errorHint: error?.hint,
       userData: data ? {
         id: data.id,
         email: data.email,
-        name: data.name
+        name: data.name,
+        plan: data.plan,
+        avatar: data.avatar,
+        created_at: data.created_at
       } : null
     });
 
@@ -257,7 +269,10 @@ export const getUserProfile = async (userId: string) => {
 
 export const getUserSettings = async (userId: string): Promise<UserSettings | null> => {
   try {
+    console.log('[getUserSettings] Function called for userId:', userId);
+    
     if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+      console.log('[getUserSettings] Supabase not configured, returning default settings');
       // Return default settings for demo mode
       return {
         accountability_type: 'self',
@@ -273,13 +288,22 @@ export const getUserSettings = async (userId: string): Promise<UserSettings | nu
       .eq('user_id', userId)
       .maybeSingle();
 
+    console.log('[getUserSettings] Query result:', {
+      hasData: !!data,
+      hasError: !!error,
+      errorCode: error?.code,
+      errorMessage: error?.message,
+      settings: data
+    });
+
     if (error) {
-      console.error('Error fetching user settings:', error);
+      console.error('[getUserSettings] Error fetching user settings:', error);
       return null;
     }
 
     // If no settings found, return default settings
     if (!data) {
+      console.log('[getUserSettings] No settings found, returning defaults');
       return {
         accountability_type: 'self',
         completion_method_setting: 'user',
@@ -288,18 +312,21 @@ export const getUserSettings = async (userId: string): Promise<UserSettings | nu
       };
     }
 
+    console.log('[getUserSettings] Returning user settings:', data);
     return data;
   } catch (err) {
-    console.error('Error in getUserSettings:', err);
+    console.error('[getUserSettings] Error in getUserSettings:', err);
     return null;
   }
 };
 
 export const updateUserSettings = async (userId: string, settings: Partial<UserSettings>): Promise<boolean> => {
   try {
+    console.log('[updateUserSettings] Function called for userId:', userId, 'with settings:', settings);
+    
     if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
       // For demo mode, just return success
-      console.log('Demo mode: would update settings for user', userId, 'with', settings);
+      console.log('[updateUserSettings] Demo mode: would update settings for user', userId, 'with', settings);
       return true;
     }
 
@@ -311,14 +338,21 @@ export const updateUserSettings = async (userId: string, settings: Partial<UserS
       })
       .eq('user_id', userId);
 
+    console.log('[updateUserSettings] Update result:', {
+      hasError: !!error,
+      errorCode: error?.code,
+      errorMessage: error?.message
+    });
+
     if (error) {
-      console.error('Error updating user settings:', error);
+      console.error('[updateUserSettings] Error updating user settings:', error);
       return false;
     }
 
+    console.log('[updateUserSettings] Successfully updated user settings');
     return true;
   } catch (err) {
-    console.error('Error in updateUserSettings:', err);
+    console.error('[updateUserSettings] Error in updateUserSettings:', err);
     return false;
   }
 };
