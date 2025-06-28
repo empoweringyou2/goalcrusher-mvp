@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Wand2, Send, Sparkles, ArrowLeft, Target, Calendar, Clock, Mic, MicOff, Volume2, VolumeX, Eye, Ear, AlertCircle, Zap } from 'lucide-react';
 import { Screen } from '../App';
 import { User, AppConfig, isProFeatureAvailable } from '../types/user';
-import { ProFeatureGate, ProBadge } from './ProFeatureGate';
+import { ProFeatureGate, ProTooltip } from './ProFeatureGate';
 import { sendToCrushion, getFallbackResponse, isOpenAIConfigured } from '../lib/callCrushionAssistant';
 
 interface GoalWizardProps {
@@ -493,7 +493,7 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
           </div>
         )}
 
-        {/* Audio preference indicator */}
+        {/* Audio preference indicator - simplified without beta badge */}
         {preferAudio && hasVoiceAccess && (
           <div className="flex justify-center">
             <div className="bg-blue-500/20 border border-blue-500/40 rounded-xl p-3 flex items-center gap-2">
@@ -501,7 +501,6 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
               <span className="text-blue-400 text-sm">
                 Audio mode enabled - Crushion will speak automatically
               </span>
-              {appConfig.betaAccess && user.plan === 'free' && <ProBadge />}
             </div>
           </div>
         )}
@@ -607,7 +606,7 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
             </div>
           </div>
 
-          {/* Footer with current settings */}
+          {/* Footer with current settings - simplified without beta indicators */}
           <div className="mt-2 text-center">
             <p className="text-xs text-gray-500">
               {hasVoiceAccess ? (
@@ -620,12 +619,9 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
                   {speechSupported && (
                     <> • 💬 Voice input available</>
                   )}
-                  {appConfig.betaAccess && user.plan === 'free' && (
-                    <> • ✨ Voice features free during beta</>
-                  )}
                 </>
               ) : (
-                <>🔒 Voice features require Pro plan • Free during beta</>
+                <>🔒 Voice features require Pro plan</>
               )}
               {!hasOpenAI && (
                 <> • 🤖 Add OpenAI API key for real AI responses</>

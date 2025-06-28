@@ -23,15 +23,12 @@ export const ProFeatureGate: React.FC<ProFeatureGateProps> = ({
   className = ''
 }) => {
   const hasAccess = !isProFeature || userPlan === 'pro' || betaAccess;
-  const isBetaUser = betaAccess && userPlan === 'free';
 
   if (hasAccess) {
     return (
       <div className={`relative ${className}`}>
         {children}
-        {isBetaUser && isProFeature && (
-          <ProBadge />
-        )}
+        {/* Removed ProBadge - no more beta symbols */}
       </div>
     );
   }
@@ -77,14 +74,7 @@ export const ProFeatureGate: React.FC<ProFeatureGateProps> = ({
   );
 };
 
-export const ProBadge: React.FC<{ className?: string }> = ({ className = '' }) => (
-  <div className={`absolute top-1 right-1 z-10 ${className}`}>
-    <div className="bg-gray-800/90 backdrop-blur-sm border border-gray-600 rounded-md px-2 py-1 flex items-center gap-1 opacity-60 hover:opacity-100 transition-opacity">
-      <Unlock className="w-3 h-3 text-blue-400" />
-      <span className="text-xs font-medium text-blue-400">β</span>
-    </div>
-  </div>
-);
+// Removed ProBadge component entirely - no more beta symbols
 
 export const ProTooltip: React.FC<{ featureName: string; children: React.ReactNode }> = ({ featureName, children }) => (
   <div className="group relative">

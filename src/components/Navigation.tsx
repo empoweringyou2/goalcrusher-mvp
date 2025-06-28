@@ -141,11 +141,7 @@ export const Navigation: React.FC<NavigationProps> = ({
               <span className="text-sm text-gray-400">Level {user.level}</span>
               <div className="flex items-center gap-2">
                 <span className="text-sm text-yellow-400 font-semibold">{user.xp?.toLocaleString()} XP</span>
-                {appConfig.betaAccess && user.plan === 'free' && (
-                  <div className="bg-gray-700 border border-gray-600 text-blue-400 px-2 py-0.5 rounded text-xs font-medium flex items-center gap-1">
-                    <span>β</span>
-                  </div>
-                )}
+                {/* Removed beta badge - no more beta symbols */}
               </div>
             </div>
             <div className="w-full bg-gray-700 rounded-full h-2">
@@ -156,7 +152,7 @@ export const Navigation: React.FC<NavigationProps> = ({
             </div>
             <p className="text-xs text-gray-400 mt-1">550 XP to next level</p>
             
-            {/* Plan indicator */}
+            {/* Plan indicator - simplified without beta symbols */}
             <div className="mt-3 pt-3 border-t border-gray-700">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-gray-400">Plan:</span>
@@ -166,11 +162,7 @@ export const Navigation: React.FC<NavigationProps> = ({
                   {user.plan === 'pro' ? '👑 Pro' : '🆓 Free'}
                 </span>
               </div>
-              {appConfig.betaAccess && (
-                <p className="text-xs text-blue-400 mt-1 opacity-75">
-                  All features unlocked during beta
-                </p>
-              )}
+              {/* Removed beta access indicator */}
             </div>
           </div>
         </div>
