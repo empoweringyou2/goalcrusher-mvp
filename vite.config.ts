@@ -10,4 +10,12 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
+  server: {
+    headers: {
+      'Cache-Control': 'no-store',
+    },
+    watch: {
+      usePolling: true
+    }
+  },
 });

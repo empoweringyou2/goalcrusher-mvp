@@ -19,6 +19,52 @@ interface Message {
   isLoading?: boolean;
 }
 
+// App data version for localStorage management
+const APP_DATA_VERSION = "v1.2";
+
+// Robust localStorage helper functions with versioning
+const getVersionedLocalStorage = (key: string, defaultValue: any = null) => {
+  try {
+    const stored = localStorage.getItem(key);
+    if (!stored) return defaultValue;
+    
+    const parsed = JSON.parse(stored);
+    
+    // Check if the stored data has a version
+    if (parsed && typeof parsed === 'object' && parsed.version) {
+      if (parsed.version === APP_DATA_VERSION) {
+        return parsed.data;
+      } else {
+        console.log(`[GoalWizard] Removing outdated localStorage key: ${key}`);
+        localStorage.removeItem(key);
+        return defaultValue;
+      }
+    } else {
+      // Legacy data without version, remove it
+      console.log(`[GoalWizard] Removing legacy localStorage key: ${key}`);
+      localStorage.removeItem(key);
+      return defaultValue;
+    }
+  } catch (error) {
+    console.error(`[GoalWizard] Error reading localStorage key ${key}:`, error);
+    localStorage.removeItem(key);
+    return defaultValue;
+  }
+};
+
+const setVersionedLocalStorage = (key: string, value: any) => {
+  try {
+    const versionedData = {
+      version: APP_DATA_VERSION,
+      data: value,
+      timestamp: Date.now()
+    };
+    localStorage.setItem(key, JSON.stringify(versionedData));
+  } catch (error) {
+    console.error(`[GoalWizard] Error setting localStorage key ${key}:`, error);
+  }
+};
+
 export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appConfig }) => {
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -76,16 +122,12 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
       speechSynthesisRef.current = window.speechSynthesis;
     }
 
-    // Load voice preference from localStorage
-    const savedVoiceStyle = localStorage.getItem('crushionVoiceStyle');
-    if (savedVoiceStyle) {
-      setCrushionVoiceStyle(savedVoiceStyle);
-    }
+    // Load voice preference from localStorage with versioning
+    const savedVoiceStyle = getVersionedLocalStorage('crushionVoiceStyle', 'friendly');
+    setCrushionVoiceStyle(savedVoiceStyle);
 
-    const savedAudioPreference = localStorage.getItem('preferAudio');
-    if (savedAudioPreference) {
-      setPreferAudio(savedAudioPreference === 'true');
-    }
+    const savedAudioPreference = getVersionedLocalStorage('preferAudio', false);
+    setPreferAudio(savedAudioPreference);
   }, []);
 
   // Auto-speak new AI messages when preferAudio is enabled
@@ -193,7 +235,7 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
     
     const newPreference = !preferAudio;
     setPreferAudio(newPreference);
-    localStorage.setItem('preferAudio', newPreference.toString());
+    setVersionedLocalStorage('preferAudio', newPreference);
     
     // Stop any current speech when switching to read mode
     if (!newPreference && isSpeaking) {
@@ -578,6 +620,9 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
               )}
               {!hasOpenAI && (
                 <> • 🤖 Add OpenAI API key for real AI responses</>
+              )}
+              {import.meta.env.DEV && (
+                <> • 🔧 Dev mode: v{APP_DATA_VERSION}</>
               )}
             </p>
           </div>

@@ -12,8 +12,12 @@ import { EmailVerificationHandler } from './components/EmailVerificationHandler'
 import { useAuth } from './hooks/useAuth';
 import { AppConfig } from './types/user';
 import { Loader2, AlertCircle } from 'lucide-react';
+import { supabase } from './lib/supabase';
 
 export type Screen = 'welcome' | 'dashboard' | 'goal-wizard' | 'gamification' | 'analytics' | 'settings';
+
+// App data version for localStorage management
+const APP_DATA_VERSION = "v1.2";
 
 function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('dashboard');
@@ -29,10 +33,107 @@ function App() {
     version: '1.0.0-beta'
   };
 
-  // Check if user has completed onboarding
+  // Dev-only session and cache reset logic
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      console.log('[App] Development mode detected - checking for cache/session reset needs');
+      
+      // Check if we need to reset due to version mismatch
+      const storedVersion = localStorage.getItem('app_data_version');
+      if (storedVersion !== APP_DATA_VERSION) {
+        console.log('[App] Version mismatch detected, clearing localStorage and signing out');
+        console.log(`Stored version: ${storedVersion}, Current version: ${APP_DATA_VERSION}`);
+        
+        // Clear all localStorage
+        localStorage.clear();
+        
+        // Sign out from Supabase
+        supabase.auth.signOut().catch(err => {
+          console.warn('[App] Error during dev signout:', err);
+        });
+        
+        // Set new version
+        localStorage.setItem('app_data_version', APP_DATA_VERSION);
+        
+        // Optional: Add a dev reset button for manual clearing
+        if (!window.devResetAdded) {
+          window.devResetAdded = true;
+          const resetButton = document.createElement('button');
+          resetButton.innerHTML = '🔄 Dev Reset';
+          resetButton.style.cssText = `
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            z-index: 9999;
+            background: #ff4444;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+          `;
+          resetButton.onclick = () => {
+            localStorage.clear();
+            supabase.auth.signOut();
+            window.location.reload();
+          };
+          document.body.appendChild(resetButton);
+        }
+      } else if (!storedVersion) {
+        // First time running this version
+        localStorage.setItem('app_data_version', APP_DATA_VERSION);
+      }
+    }
+  }, []);
+
+  // Versioned localStorage helper functions
+  const getVersionedLocalStorage = (key: string, defaultValue: any = null) => {
+    try {
+      const stored = localStorage.getItem(key);
+      if (!stored) return defaultValue;
+      
+      const parsed = JSON.parse(stored);
+      
+      // Check if the stored data has a version
+      if (parsed && typeof parsed === 'object' && parsed.version) {
+        if (parsed.version === APP_DATA_VERSION) {
+          return parsed.data;
+        } else {
+          console.log(`[App] Removing outdated localStorage key: ${key}`);
+          localStorage.removeItem(key);
+          return defaultValue;
+        }
+      } else {
+        // Legacy data without version, remove it
+        console.log(`[App] Removing legacy localStorage key: ${key}`);
+        localStorage.removeItem(key);
+        return defaultValue;
+      }
+    } catch (error) {
+      console.error(`[App] Error reading localStorage key ${key}:`, error);
+      localStorage.removeItem(key);
+      return defaultValue;
+    }
+  };
+
+  const setVersionedLocalStorage = (key: string, value: any) => {
+    try {
+      const versionedData = {
+        version: APP_DATA_VERSION,
+        data: value,
+        timestamp: Date.now()
+      };
+      localStorage.setItem(key, JSON.stringify(versionedData));
+    } catch (error) {
+      console.error(`[App] Error setting localStorage key ${key}:`, error);
+    }
+  };
+
+  // Check if user has completed onboarding with versioned storage
   useEffect(() => {
     if (isAuthenticated && user) {
-      const hasCompletedOnboarding = localStorage.getItem('hasCompletedOnboarding');
+      const hasCompletedOnboarding = getVersionedLocalStorage('hasCompletedOnboarding', false);
       if (!hasCompletedOnboarding) {
         setShowOnboarding(true);
       }
@@ -50,12 +151,12 @@ function App() {
   };
 
   const handleOnboardingComplete = () => {
-    localStorage.setItem('hasCompletedOnboarding', 'true');
+    setVersionedLocalStorage('hasCompletedOnboarding', true);
     setShowOnboarding(false);
   };
 
   const handleOnboardingSkip = () => {
-    localStorage.setItem('hasCompletedOnboarding', 'true');
+    setVersionedLocalStorage('hasCompletedOnboarding', true);
     setShowOnboarding(false);
   };
 
@@ -71,6 +172,9 @@ function App() {
           <Loader2 className="w-8 h-8 animate-spin text-yellow-400 mx-auto mb-4" />
           <h2 className="text-xl font-semibold mb-2">Loading GoalCrusher...</h2>
           <p className="text-gray-400">Setting up your goal crushing experience</p>
+          {import.meta.env.DEV && (
+            <p className="text-xs text-gray-500 mt-2">Dev mode: v{APP_DATA_VERSION}</p>
+          )}
         </div>
       </div>
     );
@@ -89,6 +193,11 @@ function App() {
             <button
               onClick={() => {
                 setAuthError(null);
+                if (import.meta.env.DEV) {
+                  // In dev mode, also clear localStorage and sign out
+                  localStorage.clear();
+                  supabase.auth.signOut();
+                }
                 window.location.reload();
               }}
               className="w-full bg-yellow-400 text-black px-6 py-2 rounded-lg font-semibold hover:bg-yellow-300 transition-colors"

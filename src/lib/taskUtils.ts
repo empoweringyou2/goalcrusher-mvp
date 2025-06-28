@@ -1,5 +1,8 @@
 import { getUserSettings, updateUserSettings } from './supabase';
 
+// App data version for localStorage management
+const APP_DATA_VERSION = "v1.2";
+
 // User settings interface definition (moved from supabase.ts)
 export interface UserSettings {
   accountability_type: 'self' | 'ai' | 'partner' | 'group';
@@ -8,6 +11,49 @@ export interface UserSettings {
 }
 
 export type { UserSettings };
+
+// Robust localStorage helper functions with versioning
+const getVersionedLocalStorage = (key: string, defaultValue: any = null) => {
+  try {
+    const stored = localStorage.getItem(key);
+    if (!stored) return defaultValue;
+    
+    const parsed = JSON.parse(stored);
+    
+    // Check if the stored data has a version
+    if (parsed && typeof parsed === 'object' && parsed.version) {
+      if (parsed.version === APP_DATA_VERSION) {
+        return parsed.data;
+      } else {
+        console.log(`[taskUtils] Removing outdated localStorage key: ${key}`);
+        localStorage.removeItem(key);
+        return defaultValue;
+      }
+    } else {
+      // Legacy data without version, remove it
+      console.log(`[taskUtils] Removing legacy localStorage key: ${key}`);
+      localStorage.removeItem(key);
+      return defaultValue;
+    }
+  } catch (error) {
+    console.error(`[taskUtils] Error reading localStorage key ${key}:`, error);
+    localStorage.removeItem(key);
+    return defaultValue;
+  }
+};
+
+const setVersionedLocalStorage = (key: string, value: any) => {
+  try {
+    const versionedData = {
+      version: APP_DATA_VERSION,
+      data: value,
+      timestamp: Date.now()
+    };
+    localStorage.setItem(key, JSON.stringify(versionedData));
+  } catch (error) {
+    console.error(`[taskUtils] Error setting localStorage key ${key}:`, error);
+  }
+};
 
 export const scheduleFollowUpEvent = async (
   userId: string, 
@@ -65,5 +111,77 @@ export const shouldScheduleFollowUp = (accountabilityType: string): boolean => {
   return accountabilityType !== 'self';
 };
 
-// Re-export the functions from supabase.ts
+// Enhanced getUserSettings with localStorage fallback and versioning
+export const getUserSettingsWithFallback = async (userId: string): Promise<UserSettings> => {
+  try {
+    // First try to get from database
+    const dbSettings = await getUserSettings(userId);
+    if (dbSettings) {
+      // Cache the settings in localStorage with versioning
+      setVersionedLocalStorage(`user_settings_${userId}`, dbSettings);
+      return dbSettings;
+    }
+
+    // Fallback to localStorage with versioning
+    const cachedSettings = getVersionedLocalStorage(`user_settings_${userId}`, null);
+    if (cachedSettings) {
+      console.log('[taskUtils] Using cached user settings');
+      return cachedSettings;
+    }
+
+    // Final fallback to default settings
+    const defaultSettings: UserSettings = {
+      accountability_type: 'self',
+      completion_method_setting: 'user',
+      default_proof_time_minutes: 10
+    };
+
+    // Cache the default settings
+    setVersionedLocalStorage(`user_settings_${userId}`, defaultSettings);
+    return defaultSettings;
+
+  } catch (error) {
+    console.error('[taskUtils] Error getting user settings:', error);
+    
+    // Return cached settings if available
+    const cachedSettings = getVersionedLocalStorage(`user_settings_${userId}`, null);
+    if (cachedSettings) {
+      return cachedSettings;
+    }
+
+    // Final fallback
+    return {
+      accountability_type: 'self',
+      completion_method_setting: 'user',
+      default_proof_time_minutes: 10
+    };
+  }
+};
+
+// Enhanced updateUserSettings with localStorage caching
+export const updateUserSettingsWithCache = async (userId: string, settings: Partial<UserSettings>): Promise<boolean> => {
+  try {
+    // Update in database
+    const success = await updateUserSettings(userId, settings);
+    
+    if (success) {
+      // Update localStorage cache
+      const currentSettings = getVersionedLocalStorage(`user_settings_${userId}`, {
+        accountability_type: 'self',
+        completion_method_setting: 'user',
+        default_proof_time_minutes: 10
+      });
+      
+      const updatedSettings = { ...currentSettings, ...settings };
+      setVersionedLocalStorage(`user_settings_${userId}`, updatedSettings);
+    }
+    
+    return success;
+  } catch (error) {
+    console.error('[taskUtils] Error updating user settings:', error);
+    return false;
+  }
+};
+
+// Re-export the original functions from supabase.ts
 export { getUserSettings, updateUserSettings };

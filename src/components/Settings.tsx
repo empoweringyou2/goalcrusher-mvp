@@ -45,6 +45,52 @@ interface SettingsProps {
   onEndBeta: () => void;
 }
 
+// App data version for localStorage management
+const APP_DATA_VERSION = "v1.2";
+
+// Robust localStorage helper functions with versioning
+const getVersionedLocalStorage = (key: string, defaultValue: any = null) => {
+  try {
+    const stored = localStorage.getItem(key);
+    if (!stored) return defaultValue;
+    
+    const parsed = JSON.parse(stored);
+    
+    // Check if the stored data has a version
+    if (parsed && typeof parsed === 'object' && parsed.version) {
+      if (parsed.version === APP_DATA_VERSION) {
+        return parsed.data;
+      } else {
+        console.log(`[Settings] Removing outdated localStorage key: ${key}`);
+        localStorage.removeItem(key);
+        return defaultValue;
+      }
+    } else {
+      // Legacy data without version, remove it
+      console.log(`[Settings] Removing legacy localStorage key: ${key}`);
+      localStorage.removeItem(key);
+      return defaultValue;
+    }
+  } catch (error) {
+    console.error(`[Settings] Error reading localStorage key ${key}:`, error);
+    localStorage.removeItem(key);
+    return defaultValue;
+  }
+};
+
+const setVersionedLocalStorage = (key: string, value: any) => {
+  try {
+    const versionedData = {
+      version: APP_DATA_VERSION,
+      data: value,
+      timestamp: Date.now()
+    };
+    localStorage.setItem(key, JSON.stringify(versionedData));
+  } catch (error) {
+    console.error(`[Settings] Error setting localStorage key ${key}:`, error);
+  }
+};
+
 export const Settings: React.FC<SettingsProps> = ({ 
   onStartTutorial, 
   user, 
@@ -81,23 +127,23 @@ export const Settings: React.FC<SettingsProps> = ({
     try {
       setIsLoading(true);
       
+      // Try to load from database first
       // In a real implementation, this would fetch all settings from the database
       // For now, we'll use localStorage as a fallback for demo purposes
-      const savedSettings = localStorage.getItem(`user_settings_${user.id}`);
+      const savedSettings = getVersionedLocalStorage(`user_settings_${user.id}`, null);
       
       if (savedSettings) {
-        const settings = JSON.parse(savedSettings);
-        setDarkMode(settings.darkMode ?? true);
-        setNotificationsEnabled(settings.notificationsEnabled ?? true);
-        setSoundEnabled(settings.soundEnabled ?? true);
-        setDataTrainingConsent(settings.dataTrainingConsent ?? false);
-        setCrushionVoice(settings.crushionVoice ?? 'friendly');
-        setAchievementsEnabled(settings.achievementsEnabled ?? true);
-        setGamificationEnabled(settings.gamificationEnabled ?? true);
-        setGoalDeadlinesEnabled(settings.goalDeadlinesEnabled ?? true);
-        setTextToSpeechEnabled(settings.textToSpeechEnabled ?? true);
-        setEmailFrequency(settings.emailFrequency ?? 'daily');
-        setThemeColor(settings.themeColor ?? 'gold');
+        setDarkMode(savedSettings.darkMode ?? true);
+        setNotificationsEnabled(savedSettings.notificationsEnabled ?? true);
+        setSoundEnabled(savedSettings.soundEnabled ?? true);
+        setDataTrainingConsent(savedSettings.dataTrainingConsent ?? false);
+        setCrushionVoice(savedSettings.crushionVoice ?? 'friendly');
+        setAchievementsEnabled(savedSettings.achievementsEnabled ?? true);
+        setGamificationEnabled(savedSettings.gamificationEnabled ?? true);
+        setGoalDeadlinesEnabled(savedSettings.goalDeadlinesEnabled ?? true);
+        setTextToSpeechEnabled(savedSettings.textToSpeechEnabled ?? true);
+        setEmailFrequency(savedSettings.emailFrequency ?? 'daily');
+        setThemeColor(savedSettings.themeColor ?? 'gold');
       }
     } catch (error) {
       console.error('Failed to load user settings:', error);
@@ -110,7 +156,7 @@ export const Settings: React.FC<SettingsProps> = ({
     try {
       setSaveStatus('saving');
       
-      // Save to localStorage for demo purposes
+      // Save to localStorage with versioning
       const allSettings = {
         darkMode,
         notificationsEnabled,
@@ -126,7 +172,7 @@ export const Settings: React.FC<SettingsProps> = ({
         ...newSettings
       };
       
-      localStorage.setItem(`user_settings_${user.id}`, JSON.stringify(allSettings));
+      setVersionedLocalStorage(`user_settings_${user.id}`, allSettings);
       
       // In a real implementation, this would also call updateUserSettings
       // await updateUserSettings(user.id, newSettings);
@@ -529,6 +575,10 @@ export const Settings: React.FC<SettingsProps> = ({
             <span className="text-white font-medium">{appConfig.version}</span>
           </div>
           <div className="flex justify-between items-center">
+            <span className="text-gray-400">Data Version</span>
+            <span className="text-white font-medium">{APP_DATA_VERSION}</span>
+          </div>
+          <div className="flex justify-between items-center">
             <span className="text-gray-400">Last Updated</span>
             <span className="text-white font-medium">January 2024</span>
           </div>
@@ -573,22 +623,22 @@ export const Settings: React.FC<SettingsProps> = ({
           <div className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg">
             <div className="w-2 h-2 bg-green-400 rounded-full flex-shrink-0"></div>
             <div className="min-w-0">
-              <h4 className="text-white font-medium text-sm">Enhanced Voice Features</h4>
-              <p className="text-gray-400 text-xs">Crushion now supports multiple voice personalities and auto-speech</p>
+              <h4 className="text-white font-medium text-sm">Enhanced Caching System</h4>
+              <p className="text-gray-400 text-xs">Improved development experience with versioned localStorage</p>
             </div>
           </div>
           <div className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg">
             <div className="w-2 h-2 bg-blue-400 rounded-full flex-shrink-0"></div>
             <div className="min-w-0">
-              <h4 className="text-white font-medium text-sm">Life Domains Management</h4>
-              <p className="text-gray-400 text-xs">Customize and track progress across different areas of your life</p>
+              <h4 className="text-white font-medium text-sm">Session State Management</h4>
+              <p className="text-gray-400 text-xs">Robust handling of authentication and user preferences</p>
             </div>
           </div>
           <div className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg">
             <div className="w-2 h-2 bg-purple-400 rounded-full flex-shrink-0"></div>
             <div className="min-w-0">
-              <h4 className="text-white font-medium text-sm">Advanced Social Features</h4>
-              <p className="text-gray-400 text-xs">Enhanced friend system with challenges and team accountability</p>
+              <h4 className="text-white font-medium text-sm">Development Tools</h4>
+              <p className="text-gray-400 text-xs">Dev reset button and improved debugging capabilities</p>
             </div>
           </div>
         </div>
@@ -868,6 +918,9 @@ export const Settings: React.FC<SettingsProps> = ({
       <div className="mb-6">
         <h1 className="text-2xl md:text-3xl font-bold text-white mb-2">Settings</h1>
         <p className="text-gray-400">Customize your GoalCrusher experience</p>
+        {import.meta.env.DEV && (
+          <p className="text-xs text-gray-500 mt-1">Dev mode: v{APP_DATA_VERSION}</p>
+        )}
       </div>
 
       {/* Save Status Indicator */}
