@@ -91,6 +91,10 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
   const [recordingTimeLeft, setRecordingTimeLeft] = useState<number | null>(null);
   const [recordingStartTime, setRecordingStartTime] = useState<number | null>(null);
   
+  // New state for continuous recording
+  const [finalTranscript, setFinalTranscript] = useState('');
+  const [interimTranscript, setInterimTranscript] = useState('');
+  
   const recognitionRef = useRef<any>(null);
   const speechSynthesisRef = useRef<SpeechSynthesis | null>(null);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -113,9 +117,9 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
       try {
         recognitionRef.current = new SpeechRecognition();
         
-        // Configure speech recognition
-        recognitionRef.current.continuous = false; // Set to false for better control
-        recognitionRef.current.interimResults = false;
+        // Configure speech recognition for continuous recording
+        recognitionRef.current.continuous = true; // Enable continuous recording
+        recognitionRef.current.interimResults = true; // Get interim results for real-time display
         recognitionRef.current.lang = 'en-US';
         recognitionRef.current.maxAlternatives = 1;
 
@@ -123,6 +127,11 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
           console.log('[GoalWizard] Speech recognition started');
           setIsListening(true);
           setSpeechError(null);
+          
+          // Clear previous transcripts
+          setFinalTranscript('');
+          setInterimTranscript('');
+          setInputValue('');
           
           // Start the 10-minute timer
           const startTime = Date.now();
@@ -154,37 +163,45 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
         recognitionRef.current.onresult = (event: any) => {
           console.log('[GoalWizard] Speech recognition result:', event);
           
-          if (event.results && event.results.length > 0) {
-            const transcript = event.results[0][0].transcript;
-            console.log('[GoalWizard] Transcript:', transcript);
+          let newFinalTranscript = '';
+          let newInterimTranscript = '';
+          
+          // Process all results
+          for (let i = 0; i < event.results.length; i++) {
+            const transcript = event.results[i][0].transcript;
             
-            if (transcript && transcript.trim()) {
-              setInputValue(transcript.trim());
-              setSpeechError(null);
+            if (event.results[i].isFinal) {
+              newFinalTranscript += transcript;
             } else {
-              setSpeechError('No speech detected. Please try again.');
+              newInterimTranscript += transcript;
             }
-          } else {
-            setSpeechError('No speech detected. Please try again.');
           }
           
-          // Clean up timers when recognition ends with result
-          cleanupRecordingTimers();
-          setIsListening(false);
+          // Update state with accumulated transcripts
+          setFinalTranscript(prev => prev + newFinalTranscript);
+          setInterimTranscript(newInterimTranscript);
+          
+          // Update input value with combined transcript
+          const combinedTranscript = (finalTranscript + newFinalTranscript + newInterimTranscript).trim();
+          setInputValue(combinedTranscript);
+          
+          // Clear speech error if we're getting results
+          if (combinedTranscript) {
+            setSpeechError(null);
+          }
+          
+          // Don't stop listening here - let it continue until manually stopped
         };
 
         recognitionRef.current.onerror = (event: any) => {
           console.error('[GoalWizard] Speech recognition error:', event.error);
           
-          // Clean up timers on error
-          cleanupRecordingTimers();
-          setIsListening(false);
-          
           let errorMessage = 'Speech recognition error. ';
           switch (event.error) {
             case 'no-speech':
-              errorMessage += 'No speech was detected. Please try again.';
-              break;
+              // Don't treat no-speech as an error in continuous mode
+              console.log('[GoalWizard] No speech detected, but continuing to listen...');
+              return; // Don't stop listening or show error
             case 'audio-capture':
               errorMessage += 'No microphone was found. Please check your microphone.';
               break;
@@ -201,15 +218,36 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
               errorMessage += `Unknown error: ${event.error}`;
           }
           
+          // Only stop and show error for serious errors
+          cleanupRecordingTimers();
+          setIsListening(false);
           setSpeechError(errorMessage);
         };
 
         recognitionRef.current.onend = () => {
           console.log('[GoalWizard] Speech recognition ended');
           
-          // Clean up timers when recognition ends
-          cleanupRecordingTimers();
-          setIsListening(false);
+          // If we were listening and it ended unexpectedly, try to restart
+          // unless we manually stopped it or hit the time limit
+          if (isListening && recordingTimerRef.current) {
+            console.log('[GoalWizard] Recognition ended unexpectedly, restarting...');
+            try {
+              recognitionRef.current.start();
+            } catch (error) {
+              console.error('[GoalWizard] Failed to restart recognition:', error);
+              cleanupRecordingTimers();
+              setIsListening(false);
+            }
+          } else {
+            // Normal end - finalize the transcript
+            const finalText = (finalTranscript + interimTranscript).trim();
+            if (finalText) {
+              setInputValue(finalText);
+            }
+            
+            cleanupRecordingTimers();
+            setIsListening(false);
+          }
         };
 
       } catch (error) {
@@ -368,6 +406,11 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
       console.log('[GoalWizard] Microphone permission granted, starting recognition...');
       setSpeechError(null);
       
+      // Clear previous transcripts before starting
+      setFinalTranscript('');
+      setInterimTranscript('');
+      setInputValue('');
+      
       // Start speech recognition
       recognitionRef.current.start();
       
@@ -380,10 +423,21 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
 
   const stopListening = () => {
     if (recognitionRef.current && isListening) {
-      console.log('[GoalWizard] Stopping speech recognition...');
+      console.log('[GoalWizard] Manually stopping speech recognition...');
+      
+      // Finalize the transcript before stopping
+      const finalText = (finalTranscript + interimTranscript).trim();
+      if (finalText) {
+        setInputValue(finalText);
+      }
+      
+      // Stop recognition and cleanup
       recognitionRef.current.stop();
       cleanupRecordingTimers();
       setIsListening(false);
+      
+      // Clear interim transcript
+      setInterimTranscript('');
     }
   };
 
@@ -402,6 +456,11 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
 
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isProcessing) return;
+
+    // If we're currently listening, stop it first
+    if (isListening) {
+      stopListening();
+    }
 
     const userMessage: Message = {
       id: messages.length + 1,
@@ -636,7 +695,7 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
             <div className="bg-red-500/20 border border-red-500/40 rounded-xl p-4 flex items-center gap-3">
               <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
               <div className="flex flex-col">
-                <span className="text-red-400 text-sm font-medium">Listening... Speak now!</span>
+                <span className="text-red-400 text-sm font-medium">🎤 Recording continuously... Click stop when done!</span>
                 {recordingTimeLeft !== null && (
                   <span className="text-gray-400 text-xs mt-1">
                     Time remaining: {formatTimeRemaining(recordingTimeLeft)}
@@ -758,7 +817,7 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
                   showUpgradePrompt={false}
                 >
                   {speechSupported && (
-                    <ProTooltip featureName="Voice Input (10min limit)">
+                    <ProTooltip featureName="Continuous Voice Input (10min limit)">
                       <button
                         onClick={isListening ? stopListening : startListening}
                         disabled={isProcessing}
@@ -767,7 +826,7 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
                             ? 'bg-red-500 text-white animate-pulse' 
                             : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                         } disabled:opacity-50 disabled:cursor-not-allowed`}
-                        title={isListening ? 'Stop listening (10min limit)' : 'Start voice input (10min limit)'}
+                        title={isListening ? 'Stop continuous recording' : 'Start continuous recording (10min limit)'}
                       >
                         {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
                       </button>
@@ -801,7 +860,7 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
                     <>👁️ Read mode: Click speak button to hear Crushion • Voice: {crushionVoiceStyle}</>
                   )}
                   {speechSupported && (
-                    <> • 🎤 Voice input available (10min limit)</>
+                    <> • 🎤 Continuous voice input available (10min limit)</>
                   )}
                 </>
               ) : (
