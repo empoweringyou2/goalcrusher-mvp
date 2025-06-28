@@ -6,6 +6,7 @@ import { User } from '../types/user'
 export const useAuth = () => {
   const [user, setUser] = useState<User | null>(null)
   const [supabaseUser, setSupabaseUser] = useState<SupabaseUser | null>(null)
+  const [session, setSession] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -25,19 +26,23 @@ export const useAuth = () => {
           console.error('[useAuth] Error getting session:', error)
           setError(error.message)
           setUser(null) // Explicitly set user to null on session error
+          setSession(null)
         } else if (session?.user) {
           console.log('[useAuth] Found existing session for:', session.user.email)
           setSupabaseUser(session.user)
+          setSession(session)
           await loadUserProfile(session.user.id, session.user)
         } else {
           console.log('[useAuth] No existing session found')
           setUser(null) // Explicitly set user to null when no session
+          setSession(null)
         }
         
       } catch (err) {
         console.error('[useAuth] Error in getInitialSession:', err)
         setError('Failed to load session')
         setUser(null) // Explicitly set user to null on unexpected error
+        setSession(null)
       } finally {
         console.log('[useAuth] getInitialSession finally block - setting loading to false')
         setLoading(false)
@@ -51,6 +56,8 @@ export const useAuth = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('[useAuth] Auth state change callback triggered:', event, session?.user?.email)
+        
+        setSession(session)
         
         if (session?.user) {
           setSupabaseUser(session.user)
@@ -78,6 +85,39 @@ export const useAuth = () => {
       subscription.unsubscribe()
     }
   }, [])
+
+  // Session retry logic - retry after 2-3 seconds if auth failed
+  useEffect(() => {
+    let retryTimeout: NodeJS.Timeout
+
+    // Only retry if we're not loading, not authenticated, and don't have a session
+    if (!loading && !user && !session) {
+      console.log('[useAuth] Setting up session retry in 3 seconds...')
+      
+      retryTimeout = setTimeout(async () => {
+        console.log('[useAuth] Retrying session fetch...')
+        try {
+          const { data: { session }, error } = await supabase.auth.getSession()
+          console.log('[useAuth] Retry session result:', !!session, !!error)
+          
+          if (session?.user && !error) {
+            console.log('[useAuth] Retry successful, processing session...')
+            setSession(session)
+            setSupabaseUser(session.user)
+            await loadUserProfile(session.user.id, session.user)
+          }
+        } catch (err) {
+          console.error('[useAuth] Session retry failed:', err)
+        }
+      }, 3000) // 3 second delay
+    }
+
+    return () => {
+      if (retryTimeout) {
+        clearTimeout(retryTimeout)
+      }
+    }
+  }, [loading, user, session])
 
   const loadUserProfile = async (userId: string, supabaseUserData: SupabaseUser) => {
     console.log('[useAuth] loadUserProfile started for userId:', userId)
@@ -275,11 +315,12 @@ export const useAuth = () => {
     }
   }
 
-  console.log('[useAuth] Hook render - loading:', loading, 'user:', !!user, 'error:', !!error)
+  console.log('[useAuth] Hook render - loading:', loading, 'user:', !!user, 'error:', !!error, 'session:', !!session)
 
   return {
     user,
     supabaseUser,
+    session,
     loading,
     error,
     refreshUser,

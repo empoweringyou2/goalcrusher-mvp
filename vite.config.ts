@@ -13,6 +13,10 @@ export default defineConfig({
   server: {
     headers: {
       'Cache-Control': 'no-store',
+      'Pragma': 'no-cache',
+    },
+    hmr: {
+      overlay: false,
     },
     watch: {
       usePolling: true

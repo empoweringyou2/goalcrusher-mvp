@@ -9,6 +9,8 @@ import { Settings } from './components/Settings';
 import { Navigation } from './components/Navigation';
 import { OnboardingTutorial } from './components/OnboardingTutorial';
 import { EmailVerificationHandler } from './components/EmailVerificationHandler';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { DebugOverlay } from './components/DebugOverlay';
 import { useAuth } from './hooks/useAuth';
 import { AppConfig } from './types/user';
 import { Loader2, AlertCircle } from 'lucide-react';
@@ -27,7 +29,7 @@ function App() {
   const [userSettings, setUserSettings] = useState<UserSettings | null>(null);
   const [isLoadingSettings, setIsLoadingSettings] = useState(false);
   
-  const { user, loading, error, isAuthenticated } = useAuth();
+  const { user, loading, error, isAuthenticated, session } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   
@@ -35,6 +37,9 @@ function App() {
     betaAccess: true,
     version: '1.0.0-beta'
   };
+
+  // Calculate authReady - app is ready when we have a session OR when we're done loading and have no user
+  const authReady = session !== null || (!loading && user === null);
 
   // Dev-only session and cache reset logic
   useEffect(() => {
@@ -217,8 +222,8 @@ function App() {
     }
   };
 
-  // Show loading screen while checking auth
-  if (loading) {
+  // Show loading screen while auth is not ready
+  if (!authReady) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
         <div className="text-center">
@@ -229,6 +234,15 @@ function App() {
             <p className="text-xs text-gray-500 mt-2">Dev mode: v{APP_DATA_VERSION}</p>
           )}
         </div>
+        
+        {/* Debug overlay for splash screen */}
+        <DebugOverlay
+          loading={loading}
+          isAuthenticated={isAuthenticated}
+          userId={user?.id}
+          authReady={authReady}
+          session={session}
+        />
       </div>
     );
   }
@@ -269,105 +283,125 @@ function App() {
             </button>
           </div>
         </div>
+        
+        {/* Debug overlay for error screen */}
+        <DebugOverlay
+          loading={loading}
+          isAuthenticated={isAuthenticated}
+          userId={user?.id}
+          authReady={authReady}
+          session={session}
+        />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <Routes>
-        {/* Email verification route */}
-        <Route path="/verify" element={<EmailVerificationHandler />} />
-        <Route path="/confirm" element={<EmailVerificationHandler />} />
-        <Route path="/auth/callback" element={<EmailVerificationHandler />} />
-        
-        {/* Main app routes */}
-        <Route path="/*" element={
-          !isAuthenticated ? (
-            <WelcomeScreen 
-              onLogin={handleLogin}
-            />
-          ) : (
-            <div className="flex flex-col md:flex-row">
-              {/* Small Bolt.new Badge for authenticated users */}
-              <div className="fixed top-1 right-1 z-50">
-                <a href="https://bolt.new/?rid=os72mi" target="_blank" rel="noopener noreferrer" 
-                   className="block transition-all duration-300 hover:shadow-lg">
-                  <img src="https://storage.bolt.army/white_circle_360x360.png" 
-                       alt="Built with Bolt.new badge" 
-                       className="w-8 h-8 md:w-10 md:h-10 rounded-full shadow-md opacity-60 hover:opacity-100 transition-opacity" />
-                </a>
-              </div>
-
-              <Navigation 
-                currentScreen={currentScreen} 
-                onNavigate={navigateTo}
-                user={user}
-                appConfig={appConfig}
-                userSettings={userSettings}
-              />
-              
-              <main className="flex-1 md:ml-64">
-                <Routes>
-                  <Route path="/" element={
-                    <Dashboard 
-                      onNavigate={navigateTo}
-                      user={user}
-                      appConfig={appConfig}
-                    />
-                  } />
-                  <Route path="/dashboard" element={
-                    <Dashboard 
-                      onNavigate={navigateTo}
-                      user={user}
-                      appConfig={appConfig}
-                    />
-                  } />
-                  <Route path="/goal-wizard" element={
-                    <GoalWizard 
-                      onNavigate={navigateTo}
-                      user={user}
-                      appConfig={appConfig}
-                      onFirstGoalCreated={handleFirstGoalCreated}
-                    />
-                  } />
-                  <Route path="/gamification" element={
-                    <Gamification 
-                      user={user}
-                      appConfig={appConfig}
-                    />
-                  } />
-                  <Route path="/analytics" element={
-                    <Analytics 
-                      user={user}
-                      appConfig={appConfig}
-                    />
-                  } />
-                  <Route path="/settings" element={
-                    <Settings 
-                      onStartTutorial={startOnboardingTutorial}
-                      user={user}
-                      appConfig={appConfig}
-                      onUpgradeToPro={() => {/* TODO: Implement */}}
-                      onDowngradeToFree={() => {/* TODO: Implement */}}
-                      onEndBeta={() => {/* TODO: Implement */}}
-                    />
-                  } />
-                </Routes>
-              </main>
-            </div>
-          )
-        } />
-      </Routes>
-
-      {/* Onboarding Tutorial */}
-      {showOnboarding && (
-        <OnboardingTutorial 
-          onComplete={handleOnboardingComplete}
-          onSkip={handleOnboardingSkip}
+    <ErrorBoundary>
+      <div className="min-h-screen bg-black text-white">
+        {/* Debug overlay for main app */}
+        <DebugOverlay
+          loading={loading}
+          isAuthenticated={isAuthenticated}
+          userId={user?.id}
+          authReady={authReady}
+          session={session}
         />
-      )}
-    </div>
+        
+        <Routes>
+          {/* Email verification route */}
+          <Route path="/verify" element={<EmailVerificationHandler />} />
+          <Route path="/confirm" element={<EmailVerificationHandler />} />
+          <Route path="/auth/callback" element={<EmailVerificationHandler />} />
+          
+          {/* Main app routes */}
+          <Route path="/*" element={
+            !isAuthenticated ? (
+              <WelcomeScreen 
+                onLogin={handleLogin}
+              />
+            ) : (
+              <div className="flex flex-col md:flex-row">
+                {/* Small Bolt.new Badge for authenticated users */}
+                <div className="fixed top-1 right-1 z-50">
+                  <a href="https://bolt.new/?rid=os72mi" target="_blank" rel="noopener noreferrer" 
+                     className="block transition-all duration-300 hover:shadow-lg">
+                    <img src="https://storage.bolt.army/white_circle_360x360.png" 
+                         alt="Built with Bolt.new badge" 
+                         className="w-8 h-8 md:w-10 md:h-10 rounded-full shadow-md opacity-60 hover:opacity-100 transition-opacity" />
+                  </a>
+                </div>
+
+                <Navigation 
+                  currentScreen={currentScreen} 
+                  onNavigate={navigateTo}
+                  user={user}
+                  appConfig={appConfig}
+                  userSettings={userSettings}
+                />
+                
+                <main className="flex-1 md:ml-64">
+                  <Routes>
+                    <Route path="/" element={
+                      <Dashboard 
+                        onNavigate={navigateTo}
+                        user={user}
+                        appConfig={appConfig}
+                      />
+                    } />
+                    <Route path="/dashboard" element={
+                      <Dashboard 
+                        onNavigate={navigateTo}
+                        user={user}
+                        appConfig={appConfig}
+                      />
+                    } />
+                    <Route path="/goal-wizard" element={
+                      <GoalWizard 
+                        onNavigate={navigateTo}
+                        user={user}
+                        appConfig={appConfig}
+                        onFirstGoalCreated={handleFirstGoalCreated}
+                      />
+                    } />
+                    <Route path="/gamification" element={
+                      <Gamification 
+                        user={user}
+                        appConfig={appConfig}
+                      />
+                    } />
+                    <Route path="/analytics" element={
+                      <Analytics 
+                        user={user}
+                        appConfig={appConfig}
+                      />
+                    } />
+                    <Route path="/settings" element={
+                      <Settings 
+                        onStartTutorial={startOnboardingTutorial}
+                        user={user}
+                        appConfig={appConfig}
+                        onUpgradeToPro={() => {/* TODO: Implement */}}
+                        onDowngradeToFree={() => {/* TODO: Implement */}}
+                        onEndBeta={() => {/* TODO: Implement */}}
+                      />
+                    } />
+                  </Routes>
+                </main>
+              </div>
+            )
+          } />
+        </Routes>
+
+        {/* Onboarding Tutorial */}
+        {showOnboarding && (
+          <OnboardingTutorial 
+            onComplete={handleOnboardingComplete}
+            onSkip={handleOnboardingSkip}
+          />
+        )}
+      </div>
+    </ErrorBoundary>
   );
 }
 
