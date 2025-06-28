@@ -27,6 +27,7 @@ export async function sendToCrushion(userInput: string, userId: string, threadId
     let runStatus = run.status;
     let attempts = 0;
     const maxAttempts = 30; // Prevent infinite loops
+    let taskCreated = false; // Track if a task was successfully created
 
     while (runStatus !== "completed" && attempts < maxAttempts) {
       await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
@@ -91,6 +92,12 @@ export async function sendToCrushion(userInput: string, userId: string, threadId
             const resultJson = await result.json();
             console.log("Supabase function result:", resultJson);
 
+            // Check if the task was successfully created
+            if (toolCall.function.name === "create_task" && result.ok && resultJson && !resultJson.error) {
+              console.log("Task successfully created, setting taskCreated flag to true");
+              taskCreated = true;
+            }
+
             toolOutputs.push({
               tool_call_id: toolCall.id,
               output: JSON.stringify(resultJson),
@@ -141,7 +148,8 @@ export async function sendToCrushion(userInput: string, userId: string, threadId
       console.error("No assistant messages found in thread!");
       return { 
         reply: "⚠️ Crushion didn't send any response. Check console for details.", 
-        threadId: thread.id 
+        threadId: thread.id,
+        taskCreated: false
       };
     }
     
@@ -151,16 +159,19 @@ export async function sendToCrushion(userInput: string, userId: string, threadId
     if (lastAssistantMessage.content[0].type === 'text') {
       const replyText = lastAssistantMessage.content[0].text.value;
       console.log("Extracted reply text:", replyText);
+      console.log("Task created during this interaction:", taskCreated);
       
       return { 
         reply: replyText, 
-        threadId: thread.id 
+        threadId: thread.id,
+        taskCreated: taskCreated
       };
     } else {
       console.error("Unexpected message type from assistant:", lastAssistantMessage.content[0].type);
       return { 
         reply: "⚠️ Crushion sent an unexpected message format.", 
-        threadId: thread.id 
+        threadId: thread.id,
+        taskCreated: false
       };
     }
   } catch (error) {
@@ -175,7 +186,7 @@ export function isOpenAIConfigured(): boolean {
 }
 
 // Fallback function for when OpenAI is not configured
-export function getFallbackResponse(userInput: string): { reply: string; threadId?: string } {
+export function getFallbackResponse(userInput: string): { reply: string; threadId?: string; taskCreated: boolean } {
   const responses = [
     "🎯 That's an excellent goal! Let me help you break it down into actionable steps. What's your target timeline for achieving this?",
     "✨ I love your ambition! To create the perfect plan, tell me more about what success looks like for this goal.",
@@ -188,5 +199,6 @@ export function getFallbackResponse(userInput: string): { reply: string; threadI
   
   return {
     reply: randomResponse + "\n\n*Note: This is a simulated response. Connect your OpenAI API key to unlock Crushion's full AI capabilities!*",
+    taskCreated: false // Fallback responses never create tasks
   };
 }
