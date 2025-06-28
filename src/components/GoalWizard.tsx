@@ -84,6 +84,7 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
   const [preferAudio, setPreferAudio] = useState(false);
   const [threadId, setThreadId] = useState<string | undefined>();
   const [isProcessing, setIsProcessing] = useState(false);
+  const [speechError, setSpeechError] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
   const speechSynthesisRef = useRef<SpeechSynthesis | null>(null);
 
@@ -92,35 +93,98 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
 
   // Check for speech recognition and synthesis support
   useEffect(() => {
+    console.log('[GoalWizard] Initializing speech features...');
+    
     // Speech Recognition
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+    const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+    
+    if (SpeechRecognition) {
+      console.log('[GoalWizard] Speech recognition is supported');
       setSpeechSupported(true);
-      const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
-      recognitionRef.current = new SpeechRecognition();
       
-      recognitionRef.current.continuous = true; // Changed from false to true
-      recognitionRef.current.interimResults = false;
-      recognitionRef.current.lang = 'en-US';
+      try {
+        recognitionRef.current = new SpeechRecognition();
+        
+        // Configure speech recognition
+        recognitionRef.current.continuous = false; // Set to false for better control
+        recognitionRef.current.interimResults = false;
+        recognitionRef.current.lang = 'en-US';
+        recognitionRef.current.maxAlternatives = 1;
 
-      recognitionRef.current.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript;
-        setInputValue(transcript);
-        setIsListening(false);
-      };
+        recognitionRef.current.onstart = () => {
+          console.log('[GoalWizard] Speech recognition started');
+          setIsListening(true);
+          setSpeechError(null);
+        };
 
-      recognitionRef.current.onerror = (event: any) => {
-        console.error('Speech recognition error:', event.error);
-        setIsListening(false);
-      };
+        recognitionRef.current.onresult = (event: any) => {
+          console.log('[GoalWizard] Speech recognition result:', event);
+          
+          if (event.results && event.results.length > 0) {
+            const transcript = event.results[0][0].transcript;
+            console.log('[GoalWizard] Transcript:', transcript);
+            
+            if (transcript && transcript.trim()) {
+              setInputValue(transcript.trim());
+              setSpeechError(null);
+            } else {
+              setSpeechError('No speech detected. Please try again.');
+            }
+          } else {
+            setSpeechError('No speech detected. Please try again.');
+          }
+          
+          setIsListening(false);
+        };
 
-      recognitionRef.current.onend = () => {
-        setIsListening(false);
-      };
+        recognitionRef.current.onerror = (event: any) => {
+          console.error('[GoalWizard] Speech recognition error:', event.error);
+          setIsListening(false);
+          
+          let errorMessage = 'Speech recognition error. ';
+          switch (event.error) {
+            case 'no-speech':
+              errorMessage += 'No speech was detected. Please try again.';
+              break;
+            case 'audio-capture':
+              errorMessage += 'No microphone was found. Please check your microphone.';
+              break;
+            case 'not-allowed':
+              errorMessage += 'Microphone permission denied. Please allow microphone access.';
+              break;
+            case 'network':
+              errorMessage += 'Network error occurred. Please check your connection.';
+              break;
+            case 'aborted':
+              errorMessage += 'Speech recognition was aborted.';
+              break;
+            default:
+              errorMessage += `Unknown error: ${event.error}`;
+          }
+          
+          setSpeechError(errorMessage);
+        };
+
+        recognitionRef.current.onend = () => {
+          console.log('[GoalWizard] Speech recognition ended');
+          setIsListening(false);
+        };
+
+      } catch (error) {
+        console.error('[GoalWizard] Error setting up speech recognition:', error);
+        setSpeechSupported(false);
+      }
+    } else {
+      console.log('[GoalWizard] Speech recognition is not supported');
+      setSpeechSupported(false);
     }
 
     // Speech Synthesis
     if ('speechSynthesis' in window) {
       speechSynthesisRef.current = window.speechSynthesis;
+      console.log('[GoalWizard] Speech synthesis is supported');
+    } else {
+      console.log('[GoalWizard] Speech synthesis is not supported');
     }
 
     // Load voice preference from localStorage with versioning
@@ -225,15 +289,35 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
     }
   };
 
-  const startListening = () => {
-    if (recognitionRef.current && speechSupported && hasVoiceAccess) {
-      setIsListening(true);
+  const startListening = async () => {
+    if (!recognitionRef.current || !speechSupported || !hasVoiceAccess) {
+      console.log('[GoalWizard] Cannot start listening - missing requirements');
+      return;
+    }
+
+    try {
+      console.log('[GoalWizard] Requesting microphone permission...');
+      
+      // Request microphone permission first
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(track => track.stop()); // Stop the stream immediately
+      
+      console.log('[GoalWizard] Microphone permission granted, starting recognition...');
+      setSpeechError(null);
+      
+      // Start speech recognition
       recognitionRef.current.start();
+      
+    } catch (error) {
+      console.error('[GoalWizard] Error starting speech recognition:', error);
+      setSpeechError('Microphone access denied. Please allow microphone access and try again.');
+      setIsListening(false);
     }
   };
 
   const stopListening = () => {
     if (recognitionRef.current && isListening) {
+      console.log('[GoalWizard] Stopping speech recognition...');
       recognitionRef.current.stop();
       setIsListening(false);
     }
@@ -489,6 +573,25 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onNavigate, user, appCon
                   />
                 ))}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Speech error indicator */}
+        {speechError && (
+          <div className="flex justify-center">
+            <div className="bg-red-500/20 border border-red-500/40 rounded-xl p-4 flex items-center gap-3 max-w-md">
+              <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0" />
+              <div>
+                <p className="text-red-400 text-sm font-medium">Speech Recognition Error</p>
+                <p className="text-gray-300 text-xs mt-1">{speechError}</p>
+              </div>
+              <button
+                onClick={() => setSpeechError(null)}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                ×
+              </button>
             </div>
           </div>
         )}
