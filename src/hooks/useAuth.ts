@@ -120,20 +120,6 @@ export const useAuth = () => {
   }, [loading, user, session])
 
   const loadUserProfile = async (userId: string, supabaseUserData: SupabaseUser) => {
-    // ADD EMAIL CONFIRMATION CHECK AT THE VERY BEGINNING
-    if (!supabaseUserData?.email_confirmed_at) {
-      console.log('[useAuth] User email not confirmed yet. Deferring profile creation for:', supabaseUserData?.email);
-      console.log('[useAuth] Email confirmation status:', {
-        email: supabaseUserData?.email,
-        email_confirmed_at: supabaseUserData?.email_confirmed_at,
-        created_at: supabaseUserData?.created_at
-      });
-      setUser(null);
-      setError(null);
-      return; // Exit early - do not proceed with profile creation
-    }
-    // END OF EMAIL CONFIRMATION CHECK
-
     console.log('[useAuth] loadUserProfile started for userId:', userId)
     console.log('[useAuth] supabaseUserData:', {
       hasUserData: !!supabaseUserData,
