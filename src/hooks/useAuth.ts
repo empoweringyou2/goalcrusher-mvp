@@ -24,17 +24,20 @@ export const useAuth = () => {
         if (error) {
           console.error('[useAuth] Error getting session:', error)
           setError(error.message)
+          setUser(null) // Explicitly set user to null on session error
         } else if (session?.user) {
           console.log('[useAuth] Found existing session for:', session.user.email)
           setSupabaseUser(session.user)
           await loadUserProfile(session.user.id, session.user)
         } else {
           console.log('[useAuth] No existing session found')
+          setUser(null) // Explicitly set user to null when no session
         }
         
       } catch (err) {
         console.error('[useAuth] Error in getInitialSession:', err)
         setError('Failed to load session')
+        setUser(null) // Explicitly set user to null on unexpected error
       } finally {
         console.log('[useAuth] getInitialSession finally block - setting loading to false')
         setLoading(false)
@@ -100,12 +103,18 @@ export const useAuth = () => {
         // If it's a permission error, try to create the user
         if (fetchError.code === 'PGRST301' || fetchError.message?.includes('RLS')) {
           console.log('[useAuth] RLS error detected, attempting to create user profile...')
+          // Do NOT return here. Let the function continue to try and create the user,
+          // and then let the outer try/catch handle any errors.
           await createUserProfileFromOAuth(userId, supabaseUserData)
-          return
+          // After attempting creation, the flow should continue to check if a user was set.
+          // If createUserProfileFromOAuth succeeded, it would have called setUser.
+          // If it failed, setUser would not have been called, and an error would be set.
+        } else {
+          // For other fetch errors, set error and ensure user is null
+          setError('Failed to load user profile: ' + fetchError.message)
+          setUser(null) // Explicitly set user to null on error
+          return // Exit early if a non-RLS fetch error occurs and we can't proceed
         }
-        
-        setError('Failed to load user profile')
-        return
       }
 
       if (existingUser) {
@@ -122,16 +131,18 @@ export const useAuth = () => {
           xp: 0,
           joinDate: new Date(existingUser.created_at)
         })
-        return
+      } else if (!fetchError || fetchError.code === 'PGRST116') {
+        // If no existing user was found (or no rows returned), try to create
+        console.log('[useAuth] No existing profile found, creating new user...')
+        await createUserProfileFromOAuth(userId, supabaseUserData)
+        // createUserProfileFromOAuth will call setUser if successful.
+        // If it fails, it will set an error and setUser(null).
       }
-
-      // Step 2: No profile found, create new one
-      console.log('[useAuth] No existing profile found, creating new user...')
-      await createUserProfileFromOAuth(userId, supabaseUserData)
       
     } catch (err) {
       console.error('[useAuth] Error in loadUserProfile:', err)
-      setError('Failed to load user data')
+      setError('Failed to load user data: ' + (err as Error).message)
+      setUser(null) // Ensure user is null if an unexpected error occurs
     }
     
     console.log('[useAuth] loadUserProfile completed')
@@ -143,6 +154,7 @@ export const useAuth = () => {
     if (!supabaseUserData) {
       console.error('[useAuth] No supabaseUserData provided for profile creation')
       setError('Missing user data for profile creation')
+      setUser(null) // Explicitly set user to null on error
       return
     }
 
@@ -183,6 +195,7 @@ export const useAuth = () => {
           if (updateError) {
             console.error('[useAuth] Error updating user profile ID:', updateError)
             setError('Failed to synchronize user profile')
+            setUser(null) // Explicitly set user to null on error
             return
           }
 
@@ -205,6 +218,7 @@ export const useAuth = () => {
 
         console.error('[useAuth] Error creating user profile:', createError)
         setError(`Failed to create user profile: ${createError.message}`)
+        setUser(null) // Explicitly set user to null on error
         return
       }
 
@@ -221,10 +235,16 @@ export const useAuth = () => {
           xp: 0,
           joinDate: new Date(newUser.created_at)
         })
+      } else {
+        // If no user was created and no error, something unexpected happened
+        console.error('[useAuth] No user created and no error returned')
+        setError('Failed to create user profile: Unknown error')
+        setUser(null) // Explicitly set user to null
       }
     } catch (err) {
       console.error('[useAuth] Error in createUserProfileFromOAuth:', err)
       setError('Failed to create user profile')
+      setUser(null) // Explicitly set user to null on error
     }
   }
 
@@ -244,6 +264,7 @@ export const useAuth = () => {
     } catch (err) {
       console.error('[useAuth] Error ensuring user settings exist:', err)
       // Don't fail the entire auth process if settings creation fails
+      // Just log the error and continue
     }
   }
 
