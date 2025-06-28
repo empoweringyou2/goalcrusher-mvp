@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { User as SupabaseUser } from '@supabase/supabase-js'
-import { supabase, getUserProfile, updateUserProfileIdByEmail, getUserSettings } from '../lib/supabase'
+import { supabase, getUserProfile, getUserSettings } from '../lib/supabase'
 import { User } from '../types/user'
 
 export const useAuth = () => {
@@ -160,32 +160,10 @@ export const useAuth = () => {
         if (fetchError) {
           console.error(`[useAuth] Error fetching user profile (attempt ${retryCount + 1}):`, fetchError)
           
-          // If it's an RLS error and this is the first attempt, try to handle ID synchronization
-          if ((fetchError.code === 'PGRST301' || fetchError.message?.includes('RLS')) && retryCount === 0) {
-            console.log('[useAuth] RLS error detected, attempting ID synchronization...')
-            try {
-              const { data: updatedUser, error: updateError } = await updateUserProfileIdByEmail(
-                supabaseUserData.email!,
-                userId
-              )
-              
-              console.log('[useAuth] ID synchronization result:', {
-                hasUpdatedUser: !!updatedUser,
-                hasUpdateError: !!updateError,
-                updateErrorCode: updateError?.code,
-                updateErrorMessage: updateError?.message
-              })
-              
-              if (updateError) {
-                console.error('[useAuth] Error updating user profile ID:', updateError)
-              } else if (updatedUser) {
-                console.log('[useAuth] Successfully updated user profile ID')
-                existingUser = updatedUser
-                break
-              }
-            } catch (err) {
-              console.error('[useAuth] Error in ID synchronization:', err)
-            }
+          // For RLS errors, we'll rely on the database trigger to handle user creation
+          // No client-side ID synchronization needed
+          if (fetchError.code === 'PGRST301' || fetchError.message?.includes('RLS')) {
+            console.log('[useAuth] RLS error detected - database trigger should handle user creation')
           }
         } else if (data) {
           console.log(`[useAuth] Successfully found user profile on attempt ${retryCount + 1}:`, {
